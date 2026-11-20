@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DS API Chat</string>
+
+    <string name="new_chat">新对话</string>
+    <string name="search_chat">搜索对话</string>
+    <string name="no_chat">暂无对话</string>
+    <string name="today">今天</string>
+    <string name="last_7_days">最近 7 天</string>
+    <string name="earlier">更早</string>
+
+    <string name="input_hint">给 DeepSeek 发送消息</string>
+    <string name="deep_think">深度思考</string>
+    <string name="smart_search">智能搜索</string>
+    <string name="search_unavailable">公开 API 暂不支持联网搜索</string>
+    <string name="send">发送</string>
+    <string name="stop">停止</string>
+
+    <string name="thinking">思考中…</string>
+    <string name="thought_for">已思考（用时 %1$d 秒）</string>
+    <string name="copy">复制</string>
+    <string name="copied">已复制</string>
+    <string name="regenerate">重新生成</string>
+    <string name="good_answer">有帮助</string>
+    <string name="bad_answer">没帮助</string>
+    <string name="share">分享</string>
+    <string name="rename">重命名</string>
+    <string name="delete">删除</string>
+    <string name="pin">置顶</string>
+    <string name="unpin">取消置顶</string>
+    <string name="cancel">取消</string>
+    <string name="confirm">确定</string>
+    <string name="save">保存</string>
+
+    <string name="settings">设置</string>
+    <string name="api_key">API Key</string>
+    <string name="api_key_unset">未填写</string>
+    <string name="api_key_required">请先填写 API Key</string>
+    <string name="api_key_hint">sk-...</string>
+    <string name="api_key_dialog_title">填入 DeepSeek API Key</string>
+    <string name="api_key_dialog_desc">密钥仅保存在本机，用于直连 api.deepseek.com。</string>
+    <string name="api_key_get">去获取 Key</string>
+    <string name="base_url">接口地址</string>
+    <string name="model">模型</string>
+    <string name="model_chat">deepseek-chat</string>
+    <string name="model_reasoner">deepseek-reasoner</string>
+    <string name="dark_mode">深色模式</string>
+    <string name="dark_mode_system">跟随系统</string>
+    <string name="dark_mode_light">浅色</string>
+    <string name="dark_mode_dark">深色</string>
+    <string name="language">语言</string>
+    <string name="about">关于</string>
+    <string name="version">版本</string>
+    <string name="api_section">API 设置</string>
+    <string name="general">通用</string>
+    <string name="account">账号</string>
+
+    <string name="err_network">网络连接失败，请检查网络</string>
+    <string name="err_auth">API Key 无效或已过期</string>
+    <string name="err_balance">账户余额不足</string>
+    <string name="err_rate">请求过于频繁，请稍后再试</string>
+    <string name="err_server">服务异常（%1$d）</string>
+    <string name="err_stopped">已停止生成</string>
+    <string name="thinking_label">思考过程</string>
+    <string name="retry">重试</string>
+</resources>
