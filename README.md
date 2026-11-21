@@ -26,7 +26,7 @@
 
 1. 到 [Releases](https://github.com/Stickerbug/ds-api-chat/releases/latest) 下载最新的 `DS-API-Chat-<版本>.apk`。
 2. 在手机上允许「安装未知应用」，安装 APK（要求 Android 8.0+，minSdk 26）。
-3. 也可以用 adb：`adb install -r DS-API-Chat-1.0.1.apk`。
+3. 也可以用 adb：`adb install -r DS-API-Chat-1.0.2.apk`。
 4. 打开 App → 侧栏「设置」→「接口」：
    - **API Key**：在 [platform.deepseek.com](https://platform.deepseek.com/api_keys) 申请
    - **接口地址**：默认 `https://api.deepseek.com`
@@ -96,6 +96,7 @@ app/src/main/java/io/github/stickerbug/dsapichat/
 
 ## 更新日志
 
+- **1.0.2**：修正侧栏「多选」按钮与长按菜单图标——按官方基准重绘 checklist 图标（双圆 + 短横线，ink 13.3×12.7dp），菜单图标盒统一 18dp、文字列与官方对齐。
 - **1.0.1**：平板 / 宽屏适配——聊天与分享页内容区限宽 760dp 居中、附件面板限宽 560dp、设置页限宽 720dp、相册网格按屏宽自适应列数；「回到底部」按钮跟随内容区右缘。
 - **1.0.0**：首个版本（聊天、附件、分享页、导入导出、深浅色、设置页等）。
 

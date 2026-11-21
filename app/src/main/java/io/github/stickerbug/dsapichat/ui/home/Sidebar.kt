@@ -169,7 +169,7 @@ fun SidebarContent(
                                     )
                                 } else {
                                     Icon(
-                                        painter = painterResource(R.drawable.ic_list_bullets_outline_20),
+                                        painter = painterResource(R.drawable.ic_checklist_outline_16),
                                         contentDescription = "多选",
                                         modifier = Modifier
                                             .size(15.dp)
@@ -344,23 +344,25 @@ private fun SideMenuDivider() {
 }
 
 @Composable
-private fun SideMenuRow(iconRes: Int, label: String, danger: Boolean, onClick: () -> Unit) {
+private fun SideMenuRow(iconRes: Int, label: String, danger: Boolean, iconSize: androidx.compose.ui.unit.Dp = 18.dp, onClick: () -> Unit) {
     val c = Ds.color
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(44.3.dp)
             .clickable { onClick() }
-            .padding(start = 18.3.dp, end = 12.dp),
+            .padding(start = 16.3.dp, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            painter = painterResource(iconRes),
-            contentDescription = null,
-            modifier = Modifier.size(22.dp),
-            tint = if (danger) Color(0xFFE5484D) else if (c.dark) c.textPrimary else Color(0xFF0F0F0F)
-        )
-        Spacer(Modifier.width(7.dp))
+        Box(modifier = Modifier.size(18.dp), contentAlignment = Alignment.Center) {
+            Icon(
+                painter = painterResource(iconRes),
+                contentDescription = null,
+                modifier = Modifier.size(iconSize),
+                tint = if (danger) Color(0xFFE5484D) else if (c.dark) c.textPrimary else Color(0xFF0F0F0F)
+            )
+        }
+        Spacer(Modifier.width(11.dp))
         Text(
             text = label,
             fontSize = 14.5.sp,
@@ -462,7 +464,7 @@ private fun ConversationRow(
             SideMenuDivider()
             SideMenuRow(R.drawable.ic_pin_outline_20, if (conv.pinned) "取消置顶" else "置顶", false) { menu = false; onPin() }
             SideMenuDivider()
-            SideMenuRow(R.drawable.ic_list_bullets_outline_20, "多选", false) { menu = false; onMultiSelect() }
+            SideMenuRow(R.drawable.ic_checklist_outline_16, "多选", false, iconSize = 16.dp) { menu = false; onMultiSelect() }
             SideMenuDivider()
             SideMenuRow(R.drawable.ic_trash_outline_20, "删除", true) { menu = false; onDelete() }
         }
