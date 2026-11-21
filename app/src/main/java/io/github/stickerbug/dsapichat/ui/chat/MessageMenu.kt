@@ -157,7 +157,7 @@ internal fun ReportDialog(onDismiss: () -> Unit) {
         title = { Text("举报", fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
         text = {
             Text(
-                text = "感谢你的反馈。复刻版是本地演示项目，举报只记录在本机，不会上传服务器。",
+                text = "复刻版是本地开源项目，没有服务端，举报内容不会上传。\n如需反馈问题或建议，请到 GitHub Issues：\ngithub.com/Stickerbug/ds-api-chat/issues",
                 fontSize = 14.5.sp,
                 lineHeight = 22.sp,
                 color = c.textSecondary

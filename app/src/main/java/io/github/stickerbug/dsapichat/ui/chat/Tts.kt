@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import io.github.stickerbug.dsapichat.api.CloudTts
 import io.github.stickerbug.dsapichat.data.Settings
 import io.github.stickerbug.dsapichat.data.SettingsStore
+import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -42,6 +43,11 @@ object TtsController {
     private var ready = false
     private var appContext: Context? = null
 
+    /** 引擎就绪后设置页「朗读音色」可选的本地音色。 */
+    data class VoiceOption(val name: String, val label: String)
+
+    private val readyWaiters = ArrayList<CancellableContinuation<Boolean>>()
+
     /** 引擎未就绪时暂存的朗读请求。 */
     private var queued: Pair<String, String>? = null
 
@@ -50,6 +56,9 @@ object TtsController {
     /** 候选引擎包名，null 表示系统默认引擎。 */
     private var candidates: List<String?> = emptyList()
     private var attempt = 0
+
+    /** 静默探测（设置页列音色）时失败不弹 toast、不跳系统设置。 */
+    private var silentInit = false
 
     /** 本次朗读的根 id（utterance id 形如 "<msgId>#3"）。 */
     private var rootId: String? = null
@@ -65,13 +74,47 @@ object TtsController {
     private var player: MediaPlayer? = null
     private var cloudRoot: String? = null
 
-    fun ensure(context: Context) {
+    fun ensure(context: Context, silent: Boolean = false) {
         if (inited) return
         inited = true
+        silentInit = silent
         appContext = context.applicationContext
         candidates = buildCandidates(context)
         attempt = 0
         bind(0)
+    }
+
+    private fun notifyReady(ok: Boolean) {
+        val waiters = readyWaiters.toList()
+        readyWaiters.clear()
+        waiters.forEach { if (it.isActive) it.resume(ok) }
+    }
+
+    /** 等待系统 TTS 引擎初始化完成（设置页列出本地音色时用），超时返回 false。 */
+    suspend fun awaitReady(context: Context, timeoutMs: Long = 3000, silent: Boolean = false): Boolean {
+        ensure(context, silent)
+        if (ready) return true
+        return suspendCancellableCoroutine { cont ->
+            readyWaiters.add(cont)
+            mainHandler.postDelayed({
+                if (cont.isActive) {
+                    readyWaiters.remove(cont)
+                    cont.resume(false)
+                }
+            }, timeoutMs)
+        }
+    }
+
+    /** 当前系统引擎可用于中文朗读的音色（名称 + 展示名），未就绪时返回空列表。 */
+    fun localVoices(): List<VoiceOption> {
+        val e = engine ?: return emptyList()
+        val voices = runCatching { e.voices }.getOrNull() ?: return emptyList()
+        return voices
+            .filter { it.locale != null && (it.locale.language == "zh" || it.locale.language == "en") }
+            .sortedBy { if (it.locale.language == "zh") 0 else 1 }
+            .distinctBy { it.name }
+            .take(40)
+            .map { v -> VoiceOption(v.name, v.locale.displayName + " · " + v.name.substringAfterLast('-')) }
     }
 
     private fun buildCandidates(context: Context): List<String?> {
@@ -156,6 +199,7 @@ object TtsController {
                 override fun onStop(utteranceId: String?, interrupted: Boolean) = onChunkDone(utteranceId)
             })
             ready = true
+            notifyReady(true)
             Log.i(TAG, "TTS ready, engine #$index")
             val q = queued
             if (q != null) {
@@ -181,6 +225,8 @@ object TtsController {
         ready = false
         queued = null
         speakingId = null
+        notifyReady(false)
+        if (silentInit) return
         appContext?.let { ctx ->
             Toast.makeText(ctx, "没有可用的语音引擎，可先到系统设置里开启文字转语音", Toast.LENGTH_LONG).show()
             // 尝试打开系统的「文字转语音输出」设置页，方便用户启用引擎。
@@ -207,6 +253,9 @@ object TtsController {
     /** 本地系统引擎语速（来自设置）。 */
     private var localRate = 1.0f
 
+    /** 本地系统引擎音色名（来自设置，空 = 引擎默认）。 */
+    private var localVoice = ""
+
     fun speak(context: Context, id: String, text: String) {
         stop()
         val clean = sanitize(text)
@@ -226,6 +275,7 @@ object TtsController {
             return
         }
         localRate = (s?.ttsLocalSpeed ?: 1.0f).coerceIn(0.5f, 2.0f)
+        localVoice = s?.ttsLocalVoice.orEmpty()
         ensure(context)
         if (engine == null) {
             speakingId = null
@@ -257,6 +307,10 @@ object TtsController {
         }
         rootId = id
         pending = chunks.size
+        if (localVoice.isNotBlank()) {
+            val v = runCatching { e.voices?.firstOrNull { it.name == localVoice } }.getOrNull()
+            if (v != null) runCatching { e.voice = v }
+        }
         runCatching { e.setSpeechRate(localRate) }
         chunks.forEachIndexed { i, chunk ->
             val mode = if (i == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD

@@ -19,6 +19,8 @@ import android.util.Log
  */
 class VoiceInputController(
     private val context: Context,
+    /** auto / zh / en / ja；auto 时不指定语言，交给系统识别服务决定。 */
+    private val language: String = "auto",
     private val onResult: (String) -> Unit,
     private val onError: (String) -> Unit,
     private val onListeningChanged: (Boolean) -> Unit
@@ -38,7 +40,11 @@ class VoiceInputController(
 
     private val listenIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
         putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-        putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
+        when (language) {
+            "zh" -> putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
+            "en" -> putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+            "ja" -> putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ja-JP")
+        }
         putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
     }

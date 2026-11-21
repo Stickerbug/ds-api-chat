@@ -1,5 +1,6 @@
 package io.github.stickerbug.dsapichat.ui.chat
 
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -7,6 +8,9 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas as ComposeCanvas
@@ -194,7 +198,7 @@ internal fun SharePage(
                 horizontalArrangement = Arrangement.Center
             ) {
                 ShareActionButton(
-                    label = "生成图片",
+                    label = "保存图片",
                     iconRes = R.drawable.ic_photo_filled_20,
                     iconSize = 18.dp,
                     background = SHARE_BLUE,
@@ -204,27 +208,33 @@ internal fun SharePage(
                         val uri = withContext(Dispatchers.IO) {
                             renderShareImage(context, messages.filter { selected.contains(it.id) }.map { it.text })
                         }
-                        if (uri != null) {
+                        if (uri == null) {
+                            Toast.makeText(context, "生成图片失败", Toast.LENGTH_SHORT).show()
+                            return@launch
+                        }
+                        val saved = withContext(Dispatchers.IO) { saveImageToGallery(context, uri) }
+                        if (saved) {
+                            Toast.makeText(context, "已保存到相册（Pictures/DS API Chat）", Toast.LENGTH_SHORT).show()
+                        } else {
+                            // Android 9 及以下没有分区存储，回退到系统分享面板（可在其中保存到相册）。
                             val send = Intent(Intent.ACTION_SEND).apply {
                                 type = "image/png"
                                 putExtra(Intent.EXTRA_STREAM, uri)
                                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             }
-                            runCatching { context.startActivity(Intent.createChooser(send, "分享图片")) }
-                        } else {
-                            Toast.makeText(context, "生成图片失败", Toast.LENGTH_SHORT).show()
+                            runCatching { context.startActivity(Intent.createChooser(send, "保存或分享图片")) }
                         }
                     }
                 }
                 ShareActionButton(
-                    label = "复制链接",
+                    label = "复制文本",
                     iconRes = R.drawable.ic_link_outline_20,
                     background = SHARE_INDIGO,
                     tint = Color.White
                 ) {
                     if (selectedText.isNotBlank()) {
                         clipboard.setText(AnnotatedString(selectedText))
-                        Toast.makeText(context, "复刻版没有分享服务端，已复制所选内容", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "已复制所选内容", Toast.LENGTH_SHORT).show()
                     }
                 }
                 ShareActionButton(
@@ -355,6 +365,25 @@ private fun renderShareImage(context: Context, texts: List<String>): Uri? {
         FileProvider.getUriForFile(context, context.packageName + ".fileprovider", f)
     }.getOrNull()
 }
+
+/** 保存到系统相册（Android 10+ 分区存储）；旧系统返回 false 由调用方回退分享面板。 */
+private fun saveImageToGallery(context: Context, pngUri: Uri): Boolean = runCatching {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false
+    val resolver = context.contentResolver
+    val values = ContentValues().apply {
+        put(MediaStore.Images.Media.DISPLAY_NAME, "ds_chat_" + System.currentTimeMillis() + ".png")
+        put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+        put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/DS API Chat")
+        put(MediaStore.Images.Media.IS_PENDING, 1)
+    }
+    val target = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return false
+    resolver.openOutputStream(target)?.use { out ->
+        resolver.openInputStream(pngUri)?.use { it.copyTo(out) } ?: return false
+    } ?: return false
+    val done = ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }
+    resolver.update(target, done, null, null)
+    true
+}.getOrDefault(false)
 
 private fun wrapLine(text: String, paint: Paint, maxWidth: Float): List<String> {
     if (text.isBlank()) return listOf("")

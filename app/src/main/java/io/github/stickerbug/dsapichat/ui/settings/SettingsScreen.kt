@@ -1,5 +1,7 @@
 package io.github.stickerbug.dsapichat.ui.settings
 
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -20,6 +22,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +38,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
@@ -59,6 +64,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -92,7 +98,13 @@ import androidx.compose.ui.window.DialogWindowProvider
 import io.github.stickerbug.dsapichat.AppViewModel
 import io.github.stickerbug.dsapichat.R
 import io.github.stickerbug.dsapichat.data.Settings as DsSettings
+import io.github.stickerbug.dsapichat.ui.chat.TtsController
 import io.github.stickerbug.dsapichat.ui.theme.Ds
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlin.math.roundToInt
 
 private val PAGE_L = Color(0xFFF8F8F8)
@@ -115,6 +127,9 @@ private const val ASR_SF_BASE = "https://api.siliconflow.cn/v1"
 private const val TTS_OPENAI_BASE = "https://api.openai.com/v1"
 private const val TTS_GROQ_BASE = "https://api.groq.com/openai/v1"
 private const val TTS_SF_BASE = "https://api.siliconflow.cn/v1"
+private const val GITHUB_REPO = "Stickerbug/ds-api-chat"
+private const val GITHUB_RELEASES = "https://github.com/" + GITHUB_REPO + "/releases/latest"
+private const val GITHUB_ISSUES = "https://github.com/" + GITHUB_REPO + "/issues"
 
 private val RED = Color(0xFFE04B4B)
 private val SWITCH_GREEN = Color(0xFF22C55E)
@@ -138,11 +153,11 @@ private fun chevColor(): Color = if (Ds.color.dark) CHEV_D else CHEV
 @Composable
 private fun divColor(): Color = if (Ds.color.dark) DIV_D else DIV
 
-private enum class Page { Main, Account, Data, Personalize, FontSize }
+private enum class Page { Main, Data, Personalize, FontSize }
 
 private enum class Dlg {
-    None, ApiKey, BaseUrl, Model, Protocol, Language, Theme, Update, Terms, Help, HelpFull,
-    ClearAll, Logout, SharedLinks, ExportData, DeviceManage, Voice, Asr, Tts
+    None, ApiKey, BaseUrl, Model, Protocol, Language, Theme, Terms,
+    ClearAll, Voice, Asr, Tts
 }
 
 @Composable
@@ -162,6 +177,29 @@ fun SettingsRoute(vm: AppViewModel, onBack: () -> Unit) {
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) vm.exportConversations(uri) { msg -> toast(msg) }
     }
+    val scope = rememberCoroutineScope()
+    var updateInfo by remember { mutableStateOf<UpdateInfo?>(null) }
+    val versionName = remember(context) { appVersionName(context) }
+    fun openUrl(url: String) {
+        val ok = runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.isSuccess
+        if (!ok) toast("没有可用的浏览器")
+    }
+    fun checkUpdate() {
+        toast("正在检查更新…")
+        scope.launch {
+            val latest = withContext(Dispatchers.IO) { fetchLatestRelease() }
+            val newer = latest != null && isNewerVersion(latest.version, versionName)
+            updateInfo = when {
+                latest == null -> UpdateInfo("检查更新", "检查失败，请检查网络后重试。", null)
+                !newer -> UpdateInfo("检查更新", "当前已是最新版本（v" + versionName + "）。", null)
+                else -> UpdateInfo(
+                    "发现新版本 v" + latest.version,
+                    "当前版本 v" + versionName + "。" + (if (latest.notes.isBlank()) "" else "\n\n" + latest.notes.take(300)),
+                    latest.url
+                )
+            }
+        }
+    }
 
     Box(Modifier.fillMaxSize().background(pageColor())) {
     Column(
@@ -171,7 +209,6 @@ fun SettingsRoute(vm: AppViewModel, onBack: () -> Unit) {
     ) {
         val title = when (page) {
             Page.Main -> "设置"
-            Page.Account -> "账号管理"
             Page.Data -> "数据管理"
             Page.Personalize -> "个性化"
             Page.FontSize -> "字体大小"
@@ -196,8 +233,15 @@ fun SettingsRoute(vm: AppViewModel, onBack: () -> Unit) {
                 label = "settingsPage"
             ) { p ->
                 when (p) {
-                Page.Main -> MainPage(s, openPage = { page = it }, openDlg = { dlg = it }, save = { vm.saveSettings(it) })
-                Page.Account -> AccountPage(openDlg = { dlg = it })
+                Page.Main -> MainPage(
+                    s = s,
+                    versionName = versionName,
+                    openPage = { page = it },
+                    openDlg = { dlg = it },
+                    save = { vm.saveSettings(it) },
+                    onCheckUpdate = { checkUpdate() },
+                    onOpenFeedback = { openUrl(GITHUB_ISSUES) }
+                )
                 Page.Data -> DataPage(
                     s,
                     save = { vm.saveSettings(it) },
@@ -215,7 +259,14 @@ fun SettingsRoute(vm: AppViewModel, onBack: () -> Unit) {
     }
 
     if (dlg == Dlg.Voice) {
-        VoiceSheetOverlay(onDismiss = { dlg = Dlg.None }, onConfirm = { dlg = Dlg.None })
+        VoiceSheetOverlay(
+            s = s,
+            onDismiss = { dlg = Dlg.None },
+            onConfirm = { cloudVoice, localVoice ->
+                vm.saveSettings(s.copy(ttsVoice = cloudVoice, ttsLocalVoice = localVoice))
+                dlg = Dlg.None
+            }
+        )
     }
     }
     when (dlg) {
@@ -254,39 +305,9 @@ fun SettingsRoute(vm: AppViewModel, onBack: () -> Unit) {
                 dlg = Dlg.None
             }
         )
-        Dlg.Update -> InfoDialog(
-            title = "检查更新",
-            body = "当前版本 2.8.0(297)，已是最新版本。复刻版不联网检查更新。",
-            onClose = { dlg = Dlg.None }
-        )
         Dlg.Terms -> InfoDialog(
             title = "服务协议",
             body = "本应用仅提供界面与通用 API 调用能力，不提供任何模型服务。API 使用需遵守服务提供方的条款。界面图标版权归深度求索所有，仅供个人学习使用。",
-            onClose = { dlg = Dlg.None }
-        )
-        Dlg.Help, Dlg.HelpFull -> InfoDialog(
-            title = "帮助与反馈",
-            body = "复刻版为个人学习项目：界面复刻官方 DeepSeek。使用中遇到问题可查看项目 README 或提交反馈。",
-            onClose = { dlg = Dlg.None }
-        )
-        Dlg.Logout -> InfoDialog(
-            title = "退出登录",
-            body = "复刻版是本地客户端，不需要账号登录。接口凭证请在「设置 → 接口」中填写。",
-            onClose = { dlg = Dlg.None }
-        )
-        Dlg.SharedLinks -> InfoDialog(
-            title = "我共享的链接",
-            body = "复刻版暂未实现分享链接服务，没有共享记录。",
-            onClose = { dlg = Dlg.None }
-        )
-        Dlg.ExportData -> InfoDialog(
-            title = "导出所有历史对话",
-            body = "复刻版暂未实现导出。对话记录保存在本机的应用私有目录中。",
-            onClose = { dlg = Dlg.None }
-        )
-        Dlg.DeviceManage -> InfoDialog(
-            title = "登录设备管理",
-            body = "复刻版不接入账号体系，没有登录设备。",
             onClose = { dlg = Dlg.None }
         )
         Dlg.ClearAll -> AlertDialog(
@@ -344,10 +365,38 @@ fun SettingsRoute(vm: AppViewModel, onBack: () -> Unit) {
             }
         )
     }
+
+    updateInfo?.let { info ->
+        AlertDialog(
+            onDismissRequest = { updateInfo = null },
+            title = { Text(info.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
+            text = { Text(info.body, fontSize = 14.sp, color = Ds.color.textTertiary, lineHeight = 21.sp) },
+            confirmButton = {
+                TextButton(onClick = {
+                    val u = info.url
+                    updateInfo = null
+                    if (u != null) openUrl(u)
+                }) {
+                    Text(if (info.url != null && info.title.startsWith("发现新版本")) "前往下载" else "知道了", color = BRAND)
+                }
+            },
+            dismissButton = null,
+            containerColor = cardColor(),
+            shape = RoundedCornerShape(18.dp)
+        )
+    }
 }
 
 @Composable
-private fun MainPage(s: DsSettings, openPage: (Page) -> Unit, openDlg: (Dlg) -> Unit, save: (DsSettings) -> Unit) {
+private fun MainPage(
+    s: DsSettings,
+    versionName: String,
+    openPage: (Page) -> Unit,
+    openDlg: (Dlg) -> Unit,
+    save: (DsSettings) -> Unit,
+    onCheckUpdate: () -> Unit,
+    onOpenFeedback: () -> Unit
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 14.7.dp, end = 14.7.dp, bottom = 40.dp)
@@ -355,7 +404,6 @@ private fun MainPage(s: DsSettings, openPage: (Page) -> Unit, openDlg: (Dlg) -> 
         item { SectionLabel("账户", topPad = 10.dp) }
         item {
             DsCard {
-                IconRow(R.drawable.ic_user_regular, "账号管理") { openPage(Page.Account) }
                 IconRow(R.drawable.ic_data_regular, "数据管理") { openPage(Page.Data) }
             }
         }
@@ -427,59 +475,17 @@ private fun MainPage(s: DsSettings, openPage: (Page) -> Unit, openDlg: (Dlg) -> 
         item { SectionLabel("关于") }
         item {
             DsCard {
-                IconRow(R.drawable.ic_info_outline, "检查更新", "2.8.0(297)") { openDlg(Dlg.Update) }
+                IconRow(R.drawable.ic_info_outline, "检查更新", "v" + versionName) { onCheckUpdate() }
                 IconRow(R.drawable.ic_list_pen_regular, "服务协议") { openDlg(Dlg.Terms) }
             }
         }
         item { Spacer(Modifier.height(33.3.dp)) }
         item {
             DsCard {
-                IconRow(R.drawable.ic_help_outline, "帮助与反馈") { openDlg(Dlg.HelpFull) }
-            }
-        }
-        item { Spacer(Modifier.height(33.3.dp)) }
-        item {
-            DsCard {
-                IconRow(R.drawable.ic_exit_out_regular, "退出登录", chevron = false) { openDlg(Dlg.Logout) }
+                IconRow(R.drawable.ic_help_outline, "帮助与反馈") { onOpenFeedback() }
             }
         }
         item { Footer() }
-    }
-}
-
-@Composable
-private fun AccountPage(openDlg: (Dlg) -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .navigationBarsPadding()
-            .padding(start = 14.7.dp, end = 14.7.dp)
-    ) {
-        SectionLabel("账户", topPad = 10.dp)
-        DsCard {
-            IconRow(R.drawable.ic_phone_outline_24, "手机号", "未绑定") { openDlg(Dlg.Logout) }
-            IconRow(R.drawable.ic_letter_regular, "电子邮箱", "未绑定") { openDlg(Dlg.Logout) }
-            IconRow(R.drawable.ic_wechat_logo, "微信", "未绑定", tint = Color.Unspecified) { openDlg(Dlg.Logout) }
-        }
-        Spacer(Modifier.height(26.dp))
-        DsCard {
-            PlainRow("未成年人模式", value = "已关闭") { openDlg(Dlg.Logout) }
-        }
-        SectionLabel("安全")
-        DsCard {
-            IconRow(R.drawable.ic_device_outline_22, "登录设备管理") { openDlg(Dlg.DeviceManage) }
-        }
-        Spacer(Modifier.weight(1f))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(44.dp)
-                .clickable { openDlg(Dlg.Logout) },
-            contentAlignment = Alignment.Center
-        ) {
-            Text("注销账号", fontSize = 13.sp, color = RED)
-        }
-        Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -499,28 +505,6 @@ private fun DataPage(
             .padding(start = 14.7.dp, end = 14.7.dp)
     ) {
         Spacer(Modifier.height(11.3.dp))
-        DsCard {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .padding(start = 15.3.dp, end = 15.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("数据用于优化体验", fontSize = 14.5.sp, color = inkColor(), modifier = Modifier.weight(1f))
-                DsSwitch(s.dataOptIn) { save(s.copy(dataOptIn = it)) }
-            }
-        }
-        Text(
-            text = "允许我们将你的对话内容用于优化 DeepSeek 的使用体验。我们保障你的数据隐私安全。",
-            fontSize = 12.5.sp,
-            lineHeight = 19.3.sp,
-            color = MUTED,
-            modifier = Modifier.padding(start = 15.3.dp, end = 22.7.dp, top = 8.dp)
-        )
-        Spacer(Modifier.height(25.3.dp))
-        DsCard { PlainRow("我共享的链接") { openDlg(Dlg.SharedLinks) } }
-        Spacer(Modifier.height(26.dp))
         DsCard { PlainRow("导入对话", value = "zip / JSON") { onImport() } }
         Spacer(Modifier.height(26.dp))
         DsCard { PlainRow("导出所有历史对话") { onExport() } }
@@ -1058,7 +1042,11 @@ private fun RadioDot(selected: Boolean) {
 }
 
 @Composable
-private fun VoiceSheetOverlay(onDismiss: () -> Unit, onConfirm: () -> Unit) {
+private fun VoiceSheetOverlay(
+    s: DsSettings,
+    onDismiss: () -> Unit,
+    onConfirm: (cloudVoice: String, localVoice: String) -> Unit
+) {
     // 官方朗读音色弹窗：遮罩与面板同步淡入（~220ms），无缩放；关闭 ~160ms。
     var closing by remember { mutableStateOf(false) }
     var afterClose by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -1076,6 +1064,22 @@ private fun VoiceSheetOverlay(onDismiss: () -> Unit, onConfirm: () -> Unit) {
             closing = true
         }
     }
+    val context = LocalContext.current
+    var cloudVoice by remember { mutableStateOf(s.ttsVoice) }
+    var localVoice by remember { mutableStateOf(s.ttsLocalVoice) }
+    var localVoices by remember { mutableStateOf<List<TtsController.VoiceOption>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        if (TtsController.awaitReady(context, silent = true)) localVoices = TtsController.localVoices()
+    }
+    val cloudVoices = listOf(
+        "" to "默认（服务端默认）",
+        "alloy" to "alloy · 中性",
+        "echo" to "echo · 男声",
+        "fable" to "fable · 英式",
+        "onyx" to "onyx · 低沉",
+        "nova" to "nova · 女声",
+        "shimmer" to "shimmer · 柔和"
+    )
     Dialog(
         onDismissRequest = { closeThen(onDismiss) },
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
@@ -1101,11 +1105,10 @@ private fun VoiceSheetOverlay(onDismiss: () -> Unit, onConfirm: () -> Unit) {
                     .background(if (Ds.color.dark) PAGE_D else Color.White)
                     .navigationBarsPadding()
             ) {
-                Spacer(Modifier.height(8.dp))
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(28.dp)
+                        .height(44.dp)
                 ) {
                     Text(
                         text = "朗读音色",
@@ -1132,52 +1135,43 @@ private fun VoiceSheetOverlay(onDismiss: () -> Unit, onConfirm: () -> Unit) {
                         )
                     }
                 }
-                Spacer(Modifier.height(132.3.dp))
-                Image(
-                    painter = painterResource(R.drawable.voice_profile_card),
-                    contentDescription = null,
-                    contentScale = ContentScale.FillBounds,
+                Column(
                     modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .width(165.dp)
-                        .height(91.7.dp)
-                        .clip(RoundedCornerShape(46.dp))
-                )
-                Spacer(Modifier.height(15.2.dp))
-                Text(
-                    text = "贝壳",
-                    fontSize = 16.sp,
-                    lineHeight = 19.2.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = inkColor(),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = "百变活泼",
-                    fontSize = 12.5.sp,
-                    lineHeight = 15.sp,
-                    color = MUTED,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(Modifier.height(40.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
+                        .fillMaxWidth()
+                        .heightIn(max = 520.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(start = 22.dp, end = 22.dp)
                 ) {
-                    repeat(4) { i ->
-                        Box(
-                            modifier = Modifier
-                                .padding(horizontal = 3.65.dp)
-                                .size(5.7.dp)
-                                .clip(CircleShape)
-                                .background(if (i == 0) BRAND else Color(0xFFD9D9D9))
-                        )
+                    Text(
+                        "云端朗读音色（用于「朗读合成」的云端接口）",
+                        fontSize = 12.5.sp,
+                        color = MUTED
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    cloudVoices.forEach { (value, label) ->
+                        VoiceRow(label = label, selected = cloudVoice == value) { cloudVoice = value }
                     }
+                    Spacer(Modifier.height(4.dp))
+                    AsrField(cloudVoice, { cloudVoice = it }, "自定义音色", "alloy / Fritz-PlayAI / alex")
+                    Spacer(Modifier.height(16.dp))
+                    Text("本地朗读音色（系统语音引擎）", fontSize = 12.5.sp, color = MUTED)
+                    Spacer(Modifier.height(4.dp))
+                    if (localVoices.isEmpty()) {
+                        Text(
+                            "系统引擎未就绪或没有可用音色，将使用系统默认音色。",
+                            fontSize = 12.5.sp,
+                            color = MUTED,
+                            lineHeight = 18.sp,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    } else {
+                        VoiceRow(label = "系统默认", selected = localVoice.isEmpty()) { localVoice = "" }
+                        localVoices.forEach { v ->
+                            VoiceRow(label = v.label, selected = localVoice == v.name) { localVoice = v.name }
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
                 }
-                Spacer(Modifier.height(78.6.dp))
                 Box(
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
@@ -1187,7 +1181,7 @@ private fun VoiceSheetOverlay(onDismiss: () -> Unit, onConfirm: () -> Unit) {
                         .height(44.dp)
                         .clip(RoundedCornerShape(22.dp))
                         .background(BRAND)
-                        .clickable { closeThen { onConfirm() } },
+                        .clickable { closeThen { onConfirm(cloudVoice.trim(), localVoice) } },
                     contentAlignment = Alignment.Center
                 ) {
                     Text("确认", fontSize = 16.5.sp, color = Color.White, fontWeight = FontWeight.Medium)
@@ -1197,6 +1191,28 @@ private fun VoiceSheetOverlay(onDismiss: () -> Unit, onConfirm: () -> Unit) {
         }
     }
 }
+
+@Composable
+private fun VoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(42.dp)
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            fontSize = 14.5.sp,
+            color = inkColor(),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        RadioDot(selected)
+    }
+}
+
 
 @Composable
 private fun TextInputDialog(
@@ -1275,6 +1291,7 @@ private fun AsrDialog(
     var base by remember { mutableStateOf(s.asrBaseUrl) }
     var key by remember { mutableStateOf(s.asrApiKey) }
     var model by remember { mutableStateOf(s.asrModel) }
+    var lang by remember { mutableStateOf(s.asrLanguage) }
     val preset = when (base) {
         ASR_OPENAI_BASE -> "OpenAI"
         ASR_GROQ_BASE -> "Groq"
@@ -1318,6 +1335,15 @@ private fun AsrDialog(
                 AsrField(key, { key = it }, "API Key（可留空）", "sk-...")
                 Spacer(Modifier.height(8.dp))
                 AsrField(model, { model = it }, "模型", "whisper-1")
+                Spacer(Modifier.height(12.dp))
+                Text("识别语言（云端识别与系统识别通用）", fontSize = 12.5.sp, color = MUTED)
+                Spacer(Modifier.height(6.dp))
+                ChipRow(
+                    options = listOf("自动", "中文", "英文", "日语"),
+                    selected = when (lang) { "zh" -> "中文"; "en" -> "英文"; "ja" -> "日语"; else -> "自动" }
+                ) { label ->
+                    lang = when (label) { "中文" -> "zh"; "英文" -> "en"; "日语" -> "ja"; else -> "auto" }
+                }
             }
         },
         confirmButton = {
@@ -1326,7 +1352,7 @@ private fun AsrDialog(
                 if (mode == "cloud" && nb.isEmpty()) {
                     Toast.makeText(context, "已保存；云端接口还没填，语音输入时会提示不可用", Toast.LENGTH_LONG).show()
                 }
-                onSave(s.copy(asrMode = mode, asrBaseUrl = nb, asrApiKey = key.trim(), asrModel = model.trim()))
+                onSave(s.copy(asrMode = mode, asrBaseUrl = nb, asrApiKey = key.trim(), asrModel = model.trim(), asrLanguage = lang))
             }) { Text("保存", color = BRAND) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消", color = MUTED) } },
@@ -1516,3 +1542,50 @@ private fun themeLabel(m: Int): String = when (m) {
 
 private fun maskKey(k: String): String =
     if (k.isBlank()) "未填写" else if (k.length <= 10) "已填写" else k.take(4) + "****" + k.takeLast(4)
+
+private data class UpdateInfo(val title: String, val body: String, val url: String?)
+private data class ReleaseInfo(val version: String, val url: String, val notes: String)
+
+private fun versionParts(v: String): List<Int> =
+    v.trim().removePrefix("v").split('.').map { it.takeWhile(Char::isDigit).toIntOrNull() ?: 0 }
+
+/** GitHub 的 tag 是否比当前版本更新（逐段数字比较，避免把旧版本当成新版本）。 */
+private fun isNewerVersion(latest: String, current: String): Boolean {
+    val a = versionParts(latest)
+    val b = versionParts(current)
+    for (i in 0 until maxOf(a.size, b.size)) {
+        val x = a.getOrElse(i) { 0 }
+        val y = b.getOrElse(i) { 0 }
+        if (x != y) return x > y
+    }
+    return false
+}
+
+private fun appVersionName(context: android.content.Context): String = runCatching {
+    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "?"
+}.getOrDefault("?")
+
+/** 查 GitHub Releases 的最新版本；失败（无网络、限流等）返回 null。 */
+private fun fetchLatestRelease(): ReleaseInfo? = runCatching {
+    val conn = URL("https://api.github.com/repos/" + GITHUB_REPO + "/releases/latest")
+        .openConnection() as HttpURLConnection
+    conn.connectTimeout = 8000
+    conn.readTimeout = 8000
+    conn.setRequestProperty("Accept", "application/vnd.github+json")
+    conn.setRequestProperty("User-Agent", "ds-api-chat")
+    try {
+        if (conn.responseCode !in 200..299) return null
+        val text = conn.inputStream.bufferedReader().use { it.readText() }
+        val version = Regex("\"tag_name\"\\s*:\\s*\"([^\"]+)\"").find(text)
+            ?.groupValues?.get(1)?.removePrefix("v").orEmpty()
+        val url = Regex("\"html_url\"\\s*:\\s*\"([^\"]+)\"").find(text)
+            ?.groupValues?.get(1).orEmpty()
+        val notes = Regex("\"body\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"").find(text)
+            ?.groupValues?.get(1)
+            ?.replace("\\n", "\n")?.replace("\\\"", "\"")?.replace("\\r", "").orEmpty()
+        if (version.isBlank()) null
+        else ReleaseInfo(version, url.ifBlank { GITHUB_RELEASES }, notes)
+    } finally {
+        conn.disconnect()
+    }
+}.getOrNull()

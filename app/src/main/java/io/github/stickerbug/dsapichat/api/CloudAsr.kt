@@ -27,19 +27,19 @@ internal object CloudAsr {
         base: String,
         apiKey: String,
         model: String,
+        language: String = "zh",
         bytes: ByteArray,
         fileName: String,
         mime: String
     ): String = withContext(Dispatchers.IO) {
         if (base.isBlank()) throw IllegalStateException("还没有配置语音识别接口")
         if (bytes.isEmpty()) throw IllegalStateException("录音为空")
-        val body = MultipartBody.Builder()
+        val form = MultipartBody.Builder()
             .setType(MultipartBody.FORM)
             .addFormDataPart("file", fileName, bytes.toRequestBody(mime.toMediaTypeOrNull()))
             .addFormDataPart("model", model.ifBlank { "whisper-1" })
-            .addFormDataPart("language", "zh")
-            .addFormDataPart("response_format", "json")
-            .build()
+        if (language.isNotBlank() && language != "auto") form.addFormDataPart("language", language)
+        val body = form.addFormDataPart("response_format", "json").build()
         val builder = Request.Builder().url(endpoint(base)).post(body)
         if (apiKey.isNotBlank()) builder.header("Authorization", "Bearer " + apiKey.trim())
         val client = Net.http.newBuilder()

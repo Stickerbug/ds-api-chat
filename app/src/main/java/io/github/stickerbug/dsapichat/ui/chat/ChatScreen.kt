@@ -239,9 +239,10 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
     fun appendVoiceText(said: String) {
         if (said.isNotBlank()) input = if (input.isBlank()) said else input + " " + said
     }
-    val voiceController = remember {
+    val voiceController = remember(settings.asrLanguage) {
         VoiceInputController(
             context = context,
+            language = settings.asrLanguage,
             onResult = { said -> appendVoiceText(said) },
             onError = { msg ->
                 val hint = if (msg.contains("不可用") || msg.contains("没有可用的语音")) "（可在「设置 - 语音识别」里配置云端识别）" else ""
@@ -270,9 +271,10 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
         val base = settings.asrBaseUrl
         val key = settings.asrApiKey
         val model = settings.asrModel
+        val lang = settings.asrLanguage
         scope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching { CloudAsr.transcribe(base, key, model, f.readBytes(), "voice.m4a", "audio/m4a") }
+                runCatching { CloudAsr.transcribe(base, key, model, lang, f.readBytes(), "voice.m4a", "audio/m4a") }
             }
             f.delete()
             if (voiceState == VoiceState.Transcribing) voiceState = VoiceState.Idle
