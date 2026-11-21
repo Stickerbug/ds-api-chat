@@ -165,14 +165,13 @@ internal fun SharePage(
         ) {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             Column(
-                modifier = (if (wideContent) Modifier.width(500.dp) else Modifier.fillMaxWidth())
-                    .padding(horizontal = 22.dp)
+                modifier = if (wideContent) Modifier.width(500.dp) else Modifier.fillMaxWidth()
             ) {
-            Spacer(Modifier.height(22.7.dp))
-            Box(modifier = Modifier.fillMaxWidth().height(51.3.dp)) {
+            Spacer(Modifier.height(34.7.dp))
+            Box(modifier = Modifier.fillMaxWidth().height(47.4.dp)) {
                 Text(
                     text = "已选 " + selected.size + " 组",
-                    fontSize = 16.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = c.textPrimary,
                     modifier = Modifier.align(Alignment.Center)
@@ -182,16 +181,17 @@ internal fun SharePage(
                     contentDescription = "关闭",
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
+                        .padding(end = 5.dp)
                         .size(32.dp)
                         .clickable(onClick = onClose)
-                        .padding(7.dp),
-                    tint = c.textSecondary
+                        .padding(5.dp),
+                    tint = c.textPrimary
                 )
             }
             Row(
                 modifier = Modifier
                     .fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(37.7.dp, Alignment.CenterHorizontally)
+                horizontalArrangement = Arrangement.Center
             ) {
                 ShareActionButton(
                     label = "生成图片",
@@ -257,7 +257,7 @@ internal fun SharePage(
                     context.startActivity(Intent.createChooser(send, "分享"))
                 }
             }
-            Spacer(Modifier.height(4.3.dp))
+            Spacer(Modifier.height(3.6.dp))
             }
             }
         }
@@ -297,7 +297,7 @@ private fun ShareActionButton(
     onClick: () -> Unit
 ) {
     val c = Ds.color
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier = Modifier.width(85.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             modifier = Modifier
                 .size(47.3.dp)
@@ -314,7 +314,7 @@ private fun ShareActionButton(
             )
         }
         Spacer(Modifier.height(0.dp))
-        Text(text = label, fontSize = 12.sp, color = c.textPrimary)
+        Text(text = label, fontSize = 12.sp, color = c.textPrimary, maxLines = 1, softWrap = false)
     }
 }
 
