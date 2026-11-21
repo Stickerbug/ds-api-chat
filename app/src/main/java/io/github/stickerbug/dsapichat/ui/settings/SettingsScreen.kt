@@ -135,7 +135,7 @@ private enum class Page { Main, Account, Data, Personalize, FontSize }
 
 private enum class Dlg {
     None, ApiKey, BaseUrl, Model, Protocol, Language, Theme, Update, Terms, Help, HelpFull,
-    ClearAll, Logout, SharedLinks, ExportData, DeviceManage, Voice
+    ClearAll, Logout, SharedLinks, ExportData, DeviceManage, Voice, Asr, Tts
 }
 
 @Composable
@@ -214,6 +214,16 @@ fun SettingsRoute(vm: AppViewModel, onBack: () -> Unit) {
     when (dlg) {
         Dlg.None -> Unit
         Dlg.Voice -> Unit
+        Dlg.Asr -> AsrDialog(
+            s = s,
+            onDismiss = { dlg = Dlg.None },
+            onSave = { ns -> vm.saveSettings(ns); dlg = Dlg.None }
+        )
+        Dlg.Tts -> TtsDialog(
+            s = s,
+            onDismiss = { dlg = Dlg.None },
+            onSave = { ns -> vm.saveSettings(ns); dlg = Dlg.None }
+        )
         Dlg.Language -> RadioDialog(
             title = "语言",
             iconRes = R.drawable.ic_globe_language_regular,
@@ -371,6 +381,16 @@ private fun MainPage(s: DsSettings, openPage: (Page) -> Unit, openDlg: (Dlg) -> 
         item {
             DsCard {
                 IconRow(R.drawable.ic_sound_outline_24, "朗读音色") { openDlg(Dlg.Voice) }
+                IconRow(
+                    R.drawable.ic_mic_filled_20,
+                    "语音识别",
+                    value = if (s.asrBaseUrl.isNotBlank()) "已配置" else "系统识别"
+                ) { openDlg(Dlg.Asr) }
+                IconRow(
+                    R.drawable.ic_voice_outline_26,
+                    "朗读合成",
+                    value = if (s.ttsBaseUrl.isNotBlank()) "云端" else "系统"
+                ) { openDlg(Dlg.Tts) }
             }
         }
         item { SectionLabel("接口") }
@@ -1201,6 +1221,106 @@ private fun TextInputDialog(
         containerColor = cardColor(),
         shape = RoundedCornerShape(18.dp)
     )
+}
+
+@Composable
+private fun AsrDialog(
+    s: DsSettings,
+    onDismiss: () -> Unit,
+    onSave: (DsSettings) -> Unit
+) {
+    var base by remember { mutableStateOf(s.asrBaseUrl) }
+    var key by remember { mutableStateOf(s.asrApiKey) }
+    var model by remember { mutableStateOf(s.asrModel) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("语音识别", fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
+        text = {
+            Column {
+                Text(
+                    "本机没有可用的语音识别服务时，可配置 OpenAI 兼容的云端识别接口（POST /audio/transcriptions）。留空则只用系统识别。",
+                    fontSize = 13.sp, color = MUTED, lineHeight = 19.sp
+                )
+                Spacer(Modifier.height(12.dp))
+                AsrField(base, { base = it }, "接口地址", "https://api.openai.com/v1")
+                Spacer(Modifier.height(8.dp))
+                AsrField(key, { key = it }, "API Key（可留空）", "sk-...")
+                Spacer(Modifier.height(8.dp))
+                AsrField(model, { model = it }, "模型", "whisper-1")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onSave(s.copy(asrBaseUrl = base.trim(), asrApiKey = key.trim(), asrModel = model.trim()))
+            }) { Text("保存", color = BRAND) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消", color = MUTED) } },
+        containerColor = cardColor(),
+        shape = RoundedCornerShape(18.dp)
+    )
+}
+
+@Composable
+private fun TtsDialog(
+    s: DsSettings,
+    onDismiss: () -> Unit,
+    onSave: (DsSettings) -> Unit
+) {
+    var base by remember { mutableStateOf(s.ttsBaseUrl) }
+    var key by remember { mutableStateOf(s.ttsApiKey) }
+    var model by remember { mutableStateOf(s.ttsModel) }
+    var voice by remember { mutableStateOf(s.ttsVoice) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("朗读合成", fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
+        text = {
+            Column {
+                Text(
+                    "配置 OpenAI 兼容的云端语音合成接口（POST /audio/speech），朗读音色更自然，且不依赖系统语音引擎。留空则用系统朗读。",
+                    fontSize = 13.sp, color = MUTED, lineHeight = 19.sp
+                )
+                Spacer(Modifier.height(12.dp))
+                AsrField(base, { base = it }, "接口地址", "https://api.openai.com/v1")
+                Spacer(Modifier.height(8.dp))
+                AsrField(key, { key = it }, "API Key（留空用语音识别的）", "sk-...")
+                Spacer(Modifier.height(8.dp))
+                AsrField(model, { model = it }, "模型", "tts-1")
+                Spacer(Modifier.height(8.dp))
+                AsrField(voice, { voice = it }, "音色", "alloy")
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                onSave(s.copy(ttsBaseUrl = base.trim(), ttsApiKey = key.trim(), ttsModel = model.trim(), ttsVoice = voice.trim()))
+            }) { Text("保存", color = BRAND) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("取消", color = MUTED) } },
+        containerColor = cardColor(),
+        shape = RoundedCornerShape(18.dp)
+    )
+}
+
+@Composable
+private fun AsrField(value: String, onChange: (String) -> Unit, label: String, hint: String) {
+    Column {
+        Text(label, fontSize = 12.5.sp, color = MUTED)
+        Spacer(Modifier.height(5.dp))
+        BasicTextField(
+            value = value,
+            onValueChange = onChange,
+            textStyle = TextStyle(fontSize = 15.sp, color = inkColor()),
+            cursorBrush = SolidColor(BRAND),
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(if (Ds.color.dark) Ds.color.field else Color(0xFFF5F5F5), RoundedCornerShape(10.dp))
+                .padding(horizontal = 12.dp, vertical = 11.dp),
+            decorationBox = { inner ->
+                if (value.isEmpty()) Text(hint, fontSize = 15.sp, color = MUTED)
+                inner()
+            }
+        )
+    }
 }
 
 @Composable

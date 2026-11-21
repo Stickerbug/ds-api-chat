@@ -69,6 +69,7 @@ class MainActivity : ComponentActivity() {
         else if (intent.getBooleanExtra("replica_code", false)) vm.seedRich()
         else if (intent.getBooleanExtra("replica_think", false)) vm.seedDemo(answer = "")
         else if (intent.getBooleanExtra("replica_demo", false)) vm.seedDemo()
+        else if (intent.getBooleanExtra("replica_long", false)) vm.seedLongAnswer()
         setContent { DsAppRoot(vm, forceReturning) }
     }
 }

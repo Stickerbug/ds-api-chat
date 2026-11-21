@@ -226,6 +226,17 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _current.value = conv
     }
 
+    /** 调试：一条纯文本长回答，用于验证朗读分句与云端合成的多段播放。 */
+    fun seedLongAnswer() {
+        seedDemo(
+            answer = "朗读分块测试。系统会把一段较长的回答按句号切成若干段，再逐段合成语音，" +
+                "这样长回答不会因为一次请求太长而失败。第一段用来确认第一个请求正常返回。" +
+                "第二段用来确认播放结束后会继续请求下一段。第三段用来确认各段之间的衔接没有明显停顿。" +
+                "第四段用来确认全部播放结束后朗读按钮会复位。第五段用来确认中途点击停止能够立即取消后续请求。" +
+                "测试到此结束，如果听到完整连贯的语音说明分块逻辑工作正常。"
+        )
+    }
+
     /** 演示：用户消息带图片 + 文档附件，用于核对附件 chip 的排版。 */
     fun seedAttach() {
         val app = getApplication<Application>()

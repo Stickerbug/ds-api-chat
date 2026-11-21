@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
-import android.speech.RecognizerIntent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -83,6 +82,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -124,6 +124,7 @@ import androidx.compose.ui.unit.sp
 import io.github.stickerbug.dsapichat.AppViewModel
 import io.github.stickerbug.dsapichat.R
 import io.github.stickerbug.dsapichat.api.ApiProtocol
+import io.github.stickerbug.dsapichat.api.CloudAsr
 import io.github.stickerbug.dsapichat.api.resolveProtocol
 import io.github.stickerbug.dsapichat.data.Attachment
 import io.github.stickerbug.dsapichat.data.Citation
@@ -231,28 +232,93 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
         cameraUri = null
         if (ok && uri != null) vm.attach(uri)
     }
-    // 官方语音是云端 ASR（按住说话）；复刻版调系统语音识别，结果回填输入框。
-    val voiceLauncher =
-        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
-            if (res.resultCode == android.app.Activity.RESULT_OK) {
-                val said = res.data
-                    ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-                    ?.firstOrNull()
-                if (!said.isNullOrBlank()) {
-                    input = if (input.isBlank()) said else input + " " + said
+    // 语音输入：配置了云端识别接口时录音上传（OpenAI 兼容 /audio/transcriptions）；
+    // 否则调用本机 SpeechRecognizer（HyperOS 等移除系统语音搜索的机型会失败，可到设置里配置云端识别）。
+    var voiceState by remember { mutableStateOf(VoiceState.Idle) }
+    val voiceRecorder = remember { VoiceRecorder(context) }
+    fun appendVoiceText(said: String) {
+        if (said.isNotBlank()) input = if (input.isBlank()) said else input + " " + said
+    }
+    val voiceController = remember {
+        VoiceInputController(
+            context = context,
+            onResult = { said -> appendVoiceText(said) },
+            onError = { msg ->
+                val hint = if (msg.contains("不可用") || msg.contains("没有可用的语音")) "（可在「设置 - 语音识别」里配置云端识别）" else ""
+                Toast.makeText(context, msg + hint, Toast.LENGTH_LONG).show()
+            },
+            onListeningChanged = { listening ->
+                voiceState = if (listening) VoiceState.Listening else VoiceState.Idle
+            }
+        )
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            voiceController.cancel()
+            voiceController.destroy()
+            voiceRecorder.cancel()
+        }
+    }
+    fun transcribeRecording() {
+        val f = voiceRecorder.stop()
+        if (f == null) {
+            voiceState = VoiceState.Idle
+            Toast.makeText(context, "录音太短，请按住说完再点完成", Toast.LENGTH_SHORT).show()
+            return
+        }
+        voiceState = VoiceState.Transcribing
+        val base = settings.asrBaseUrl
+        val key = settings.asrApiKey
+        val model = settings.asrModel
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching { CloudAsr.transcribe(base, key, model, f.readBytes(), "voice.m4a", "audio/m4a") }
+            }
+            f.delete()
+            if (voiceState == VoiceState.Transcribing) voiceState = VoiceState.Idle
+            result.onSuccess { text ->
+                if (text.isBlank()) {
+                    Toast.makeText(context, "没有识别到内容，请再试一次", Toast.LENGTH_SHORT).show()
+                } else {
+                    appendVoiceText(text)
                 }
+            }.onFailure { e ->
+                Toast.makeText(context, "语音识别失败：" + (e.message ?: "请检查接口配置"), Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    fun startVoiceNow() {
+        if (settings.asrBaseUrl.isNotBlank()) {
+            if (voiceRecorder.start()) {
+                voiceState = VoiceState.Recording
+            } else {
+                Toast.makeText(context, "无法开始录音，请检查麦克风权限", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            voiceController.start()
+        }
+    }
+    fun cancelVoice() {
+        when (voiceState) {
+            VoiceState.Recording -> voiceRecorder.cancel()
+            VoiceState.Listening -> voiceController.cancel()
+            else -> Unit
+        }
+        voiceState = VoiceState.Idle
+    }
+    val voicePermLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) {
+                startVoiceNow()
+            } else {
+                Toast.makeText(context, "没有麦克风权限，无法语音输入", Toast.LENGTH_SHORT).show()
             }
         }
     fun startVoice() {
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "zh-CN")
-            putExtra(RecognizerIntent.EXTRA_PROMPT, "按住说话")
-        }
-        try {
-            voiceLauncher.launch(intent)
-        } catch (e: Exception) {
-            Toast.makeText(context, "设备不支持语音识别", Toast.LENGTH_SHORT).show()
+        if (context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            startVoiceNow()
+        } else {
+            voicePermLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
     val cameraDir = remember { File(context.cacheDir, "camera").apply { mkdirs() } }
@@ -596,6 +662,22 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
             }
             MessageMenuOverlay(entries = entries, onDismiss = { menuOpen = false; menuMsg = null })
         }
+        }
+
+        // 语音提示浮层：聆听时可取消；云端识别录音时可点「完成」开始转写。
+        AnimatedVisibility(
+            visible = voiceState != VoiceState.Idle,
+            enter = fadeIn(tween(120)),
+            exit = fadeOut(tween(100)),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 118.dp)
+        ) {
+            VoiceListeningPill(
+                state = voiceState,
+                onCancel = { cancelVoice() },
+                onFinish = { transcribeRecording() }
+            )
         }
 
         // 官方平板实测：分享 sheet 约 200ms 淡入，关闭瞬切。
@@ -1654,4 +1736,64 @@ private fun errText(kind: String?): String = when (kind) {
     "attach-protocol" -> "当前接口不支持附件，请把接口协议切到 Anthropic 兼容端点。"
     "attach-size" -> "文件超过 64 MB，无法上传。"
     else -> "服务暂时不可用，请稍后重试。"
+}
+
+private enum class VoiceState { Idle, Listening, Recording, Transcribing }
+
+/** 语音输入浮层：聆听/录音/识别中三种状态（呼吸圆点 + 取消/完成）。 */
+@Composable
+private fun VoiceListeningPill(state: VoiceState, onCancel: () -> Unit, onFinish: () -> Unit) {
+    val c = Ds.color
+    val pulse by rememberInfiniteTransition(label = "voicePulse").animateFloat(
+        initialValue = 0.35f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(620), RepeatMode.Reverse),
+        label = "voicePulseAlpha"
+    )
+    val label = when (state) {
+        VoiceState.Listening -> "正在聆听…"
+        VoiceState.Recording -> "正在录音…"
+        VoiceState.Transcribing -> "正在识别…"
+        VoiceState.Idle -> ""
+    }
+    Row(
+        modifier = Modifier
+            .shadow(12.dp, RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(24.dp))
+            .background(c.card)
+            .padding(start = 16.dp, end = 6.dp, top = 9.dp, bottom = 9.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF4E77FF).copy(alpha = if (state == VoiceState.Transcribing) 1f else pulse))
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(label, fontSize = 14.sp, color = c.textPrimary)
+        if (state == VoiceState.Recording) {
+            Spacer(Modifier.width(6.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(Color(0xFF4E77FF))
+                    .clickable { onFinish() }
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text("完成", fontSize = 14.sp, color = Color.White)
+            }
+        }
+        if (state != VoiceState.Transcribing) {
+            Spacer(Modifier.width(6.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(18.dp))
+                    .clickable { onCancel() }
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                Text("取消", fontSize = 14.sp, color = Color(0xFF4E77FF))
+            }
+        }
+    }
 }

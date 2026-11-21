@@ -18,7 +18,16 @@ data class Settings(
     val fontSize: Int = 2,
     val followSystemFont: Boolean = true,
     val dataOptIn: Boolean = false,
-    val collapseThinking: Boolean = true
+    val collapseThinking: Boolean = true,
+    /** 云端语音识别（OpenAI 兼容 /audio/transcriptions）；留空则只用系统识别。 */
+    val asrBaseUrl: String = "",
+    val asrApiKey: String = "",
+    val asrModel: String = "",
+    /** 云端朗读合成（OpenAI 兼容 /audio/speech）；留空则用系统 TTS。 */
+    val ttsBaseUrl: String = "",
+    val ttsApiKey: String = "",
+    val ttsModel: String = "",
+    val ttsVoice: String = ""
 ) {
     val reasoner: Boolean get() = model.contains("reasoner")
 }
@@ -40,10 +49,19 @@ class SettingsStore(context: Context) {
             fontSize = sp.getInt("font_size", 2),
             followSystemFont = sp.getBoolean("follow_system_font", true),
             dataOptIn = sp.getBoolean("data_opt_in", false),
-            collapseThinking = sp.getBoolean("collapse_thinking", true)
+            collapseThinking = sp.getBoolean("collapse_thinking", true),
+            asrBaseUrl = sp.getString("asr_base_url", "") ?: "",
+            asrApiKey = sp.getString("asr_api_key", "") ?: "",
+            asrModel = sp.getString("asr_model", "") ?: "",
+            ttsBaseUrl = sp.getString("tts_base_url", "") ?: "",
+            ttsApiKey = sp.getString("tts_api_key", "") ?: "",
+            ttsModel = sp.getString("tts_model", "") ?: "",
+            ttsVoice = sp.getString("tts_voice", "") ?: ""
         )
     )
     val settings: StateFlow<Settings> = _settings
+
+    fun current(): Settings = _settings.value
 
     fun save(s: Settings) {
         sp.edit()
@@ -60,6 +78,13 @@ class SettingsStore(context: Context) {
             .putBoolean("follow_system_font", s.followSystemFont)
             .putBoolean("data_opt_in", s.dataOptIn)
             .putBoolean("collapse_thinking", s.collapseThinking)
+            .putString("asr_base_url", s.asrBaseUrl)
+            .putString("asr_api_key", s.asrApiKey)
+            .putString("asr_model", s.asrModel)
+            .putString("tts_base_url", s.ttsBaseUrl)
+            .putString("tts_api_key", s.ttsApiKey)
+            .putString("tts_model", s.ttsModel)
+            .putString("tts_voice", s.ttsVoice)
             .apply()
         _settings.value = s
     }
