@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.UUID
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
@@ -419,11 +420,23 @@ def gd(f, grad, x0, lr=0.1, steps=100):
                 onResult("导入失败：无法读取文件")
                 return@launch
             }
-            val report = withContext(Dispatchers.Default) {
-                runCatching { ConversationImport.parse(bytes) }.getOrNull()
+            val parsed = withContext(Dispatchers.Default) {
+                runCatching {
+                    ConversationImport.parse(bytes) { name, data ->
+                        val dir = File(app.filesDir, "imported-media").apply { mkdirs() }
+                        val ext = name.substringAfterLast('.', "").lowercase()
+                            .filter { it.isLetterOrDigit() }
+                            .take(8)
+                        val file = File(dir, UUID.randomUUID().toString() + if (ext.isEmpty()) "" else "." + ext)
+                        file.outputStream().use { it.write(data) }
+                        file.absolutePath
+                    }
+                }
             }
+            val report = parsed.getOrNull()
             if (report == null) {
-                onResult("导入失败：文件格式不支持")
+                val reason = parsed.exceptionOrNull()?.message?.takeIf { it.isNotBlank() } ?: "文件格式不支持"
+                onResult("导入失败：$reason")
                 return@launch
             }
             val merged = _conversations.value.toMutableList()
@@ -446,7 +459,7 @@ def gd(f, grad, x0, lr=0.1, steps=100):
                 _conversations.value = merged.sortedWith(
                     compareByDescending<Conversation> { it.pinned }.thenByDescending { it.updatedAt }
                 )
-                persist()
+                withContext(Dispatchers.IO) { store.save(_conversations.value) }
             }
             val msg = buildString {
                 append(if (added > 0) "已导入 $added 个对话" else "没有导入新对话")

@@ -172,7 +172,7 @@ fun SidebarContent(
                                         painter = painterResource(R.drawable.ic_checklist_outline_16),
                                         contentDescription = "多选",
                                         modifier = Modifier
-                                            .size(15.dp)
+                                            .size(16.dp)
                                             .clickable { selecting = true; picked = emptySet() },
                                         tint = MUTED
                                     )
@@ -335,11 +335,12 @@ fun SidebarContent(
 
 @Composable
 private fun SideMenuDivider() {
+    val c = Ds.color
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(0.5.dp)
-            .background(Color(0xFFD4D4D4))
+            .background(if (c.dark) Color(0xFF3A3A3E) else Color(0xFFD4D4D4))
     )
 }
 

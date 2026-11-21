@@ -4,6 +4,12 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -137,7 +143,10 @@ fun SettingsRoute(vm: AppViewModel, onBack: () -> Unit) {
     val context = LocalContext.current
     fun toast(msg: String) { Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) vm.importConversations(uri) { msg -> toast(msg) }
+        if (uri != null) {
+            toast("正在导入，请稍候…")
+            vm.importConversations(uri) { msg -> toast(msg) }
+        }
     }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) vm.exportConversations(uri) { msg -> toast(msg) }
@@ -167,7 +176,21 @@ fun SettingsRoute(vm: AppViewModel, onBack: () -> Unit) {
                     .fillMaxHeight()
                     .then(if (wideContent) Modifier.width(720.dp) else Modifier.fillMaxWidth())
             ) {
-            when (page) {
+            // 子页切换动画：进入子页从右侧滑入，返回设置主页从左侧滑入。
+            AnimatedContent(
+                targetState = page,
+                transitionSpec = {
+                    if (targetState == Page.Main) {
+                        (slideInHorizontally(animationSpec = tween(240)) { -it / 4 } + fadeIn(tween(180))) togetherWith
+                            (slideOutHorizontally(animationSpec = tween(240)) { it / 4 } + fadeOut(tween(120)))
+                    } else {
+                        (slideInHorizontally(animationSpec = tween(240)) { it / 4 } + fadeIn(tween(180))) togetherWith
+                            (slideOutHorizontally(animationSpec = tween(240)) { -it / 4 } + fadeOut(tween(120)))
+                    }
+                },
+                label = "settingsPage"
+            ) { p ->
+                when (p) {
                 Page.Main -> MainPage(s, openPage = { page = it }, openDlg = { dlg = it }, save = { vm.saveSettings(it) })
                 Page.Account -> AccountPage(openDlg = { dlg = it })
                 Page.Data -> DataPage(
@@ -180,6 +203,7 @@ fun SettingsRoute(vm: AppViewModel, onBack: () -> Unit) {
                 )
                 Page.Personalize -> PersonalizePage(s, save = { vm.saveSettings(it) })
                 Page.FontSize -> FontSizePage(s, save = { vm.saveSettings(it) })
+                }
             }
             }
         }
@@ -1076,6 +1100,8 @@ private fun VoiceSheetOverlay(onDismiss: () -> Unit, onConfirm: () -> Unit) {
                 Spacer(Modifier.height(78.6.dp))
                 Box(
                     modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .widthIn(max = 560.dp)
                         .fillMaxWidth()
                         .padding(start = 22.dp, end = 22.dp)
                         .height(44.dp)

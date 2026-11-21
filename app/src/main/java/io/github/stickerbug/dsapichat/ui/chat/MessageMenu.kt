@@ -1,5 +1,8 @@
 package io.github.stickerbug.dsapichat.ui.chat
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -23,12 +26,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -47,10 +52,13 @@ internal data class MenuEntry(
 @Composable
 internal fun MessageMenuOverlay(entries: List<MenuEntry>, onDismiss: () -> Unit) {
     val c = Ds.color
+    // 弹出动画：遮罩 0→0.2 淡入，卡片 0.9→1 缩放 + 淡入（官方菜单是弹出而非瞬现）。
+    val appear = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, tween(170, easing = FastOutSlowInEasing)) }
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0x33000000))
+            .background(Color.Black.copy(alpha = 0.20f * appear.value))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -62,6 +70,11 @@ internal fun MessageMenuOverlay(entries: List<MenuEntry>, onDismiss: () -> Unit)
             modifier = Modifier
                 .offset(x = (-14).dp)
                 .width(190.3.dp)
+                .graphicsLayer {
+                    scaleX = 0.90f + 0.10f * appear.value
+                    scaleY = 0.90f + 0.10f * appear.value
+                    alpha = appear.value
+                }
                 .clip(RoundedCornerShape(14.dp))
                 .background(if (c.dark) Color(0xFF292929) else Color.White)
                 .clickable(
@@ -81,7 +94,7 @@ internal fun MessageMenuOverlay(entries: List<MenuEntry>, onDismiss: () -> Unit)
                         .drawBehind {
                             if (e != entries.last()) {
                                 drawLine(
-                                    color = Color(0xFFD4D4D4),
+                                    color = if (c.dark) Color(0xFF3A3A3E) else Color(0xFFD4D4D4),
                                     start = androidx.compose.ui.geometry.Offset(0f, size.height - 1f),
                                     end = androidx.compose.ui.geometry.Offset(size.width, size.height - 1f),
                                     strokeWidth = 1f

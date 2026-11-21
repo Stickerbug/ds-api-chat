@@ -13,6 +13,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -25,6 +26,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -178,6 +181,8 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
     var sheetSources by remember { mutableStateOf<List<SearchSource>?>(null) }
     // 长按消息菜单 / 选择文本 / 举报 / 分享页（对齐官方 2.8.0）
     var menuMsg by remember { mutableStateOf<Msg?>(null) }
+    var menuOpen by remember { mutableStateOf(false) }
+    var lastMenuMsg by remember { mutableStateOf<Msg?>(null) }
     var selectTextFor by remember { mutableStateOf<String?>(null) }
     var reportOpen by remember { mutableStateOf(false) }
     var shareOpen by remember { mutableStateOf(false) }
@@ -398,7 +403,7 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
                                     reaction = reactions[m.id] ?: 0,
                                     onRegenerate = { vm.regenerate() },
                                     onOpenSources = { sheetSources = m.sources },
-                                    onLongPress = { menuMsg = m },
+                                    onLongPress = { menuMsg = m; lastMenuMsg = m; menuOpen = true },
                                     onReact = { v ->
                                         reactions = reactions + (m.id to if (reactions[m.id] == v) 0 else v)
                                     },
@@ -517,7 +522,12 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
         }
     }
 
-        if (galleryOpen) {
+        AnimatedVisibility(
+            visible = galleryOpen,
+            enter = slideInVertically(animationSpec = tween(260)) { it } + fadeIn(tween(180)),
+            exit = slideOutVertically(animationSpec = tween(220)) { it } + fadeOut(tween(160)),
+            modifier = Modifier.fillMaxSize()
+        ) {
             MediaPickerOverlay(
                 images = pickerMedia,
                 selected = pickerPicked,
@@ -537,7 +547,13 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
         }
 
         // ---- 长按消息菜单 / 分享页（对齐官方 2.8.0）----
-        val mm = menuMsg
+        val mm = menuMsg ?: lastMenuMsg
+        AnimatedVisibility(
+            visible = menuOpen,
+            enter = fadeIn(tween(150)),
+            exit = fadeOut(tween(120)),
+            modifier = Modifier.fillMaxSize()
+        ) {
         if (mm != null) {
             val isAssistant = mm.role == Role.ASSISTANT
             val entries = ArrayList<MenuEntry>()
@@ -576,10 +592,15 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
                     shareText(context, mm.text)
                 })
             }
-            MessageMenuOverlay(entries = entries, onDismiss = { menuMsg = null })
+            MessageMenuOverlay(entries = entries, onDismiss = { menuOpen = false; menuMsg = null })
+        }
         }
 
-        if (shareOpen) {
+        AnimatedVisibility(
+            visible = shareOpen,
+            enter = slideInVertically(animationSpec = tween(280)) { it } + fadeIn(tween(220)),
+            exit = slideOutVertically(animationSpec = tween(240)) { it } + fadeOut(tween(180))
+        ) {
             SharePage(
                 messages = messages.filter { it.role == Role.ASSISTANT && it.text.isNotBlank() },
                 initialSelected = shareSelected,
@@ -1340,7 +1361,11 @@ private fun ChatInputBar(
     val navBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val imeVisible = WindowInsets.ime.getBottom(density) > 0
     // 官方：面板展开时输入卡底部不再留导航条间距（面板自带 navigationBarsPadding）。
-    val bottomPad = if (imeVisible || panelOpen) 5.3.dp else navBottom + 5.3.dp
+    val bottomPad by animateDpAsState(
+        targetValue = if (imeVisible || panelOpen) 5.3.dp else navBottom + 5.3.dp,
+        animationSpec = tween(220),
+        label = "inputBottomPad"
+    )
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1485,26 +1510,42 @@ private fun ChatInputBar(
                 }
             }
         }
-        if (panelOpen) {
-            AttachmentPanel(
-                recent = recentMedia,
-                selected = panelPicked.map { it.id }.toSet(),
-                permissionGranted = recentMedia.isNotEmpty(),
-                onToggle = onToggleRecent,
-                onCamera = onCamera,
-                onGallery = onOpenGallery,
-                onFiles = onPickAttachment
-            )
-        } else {
-            Spacer(Modifier.height(3.3.dp))
-            Text(
-                text = "回答由 AI 生成，仅供参考",
-                fontSize = 10.5.sp,
-                lineHeight = 12.sp,
-                color = if (c.dark) Color(0xFF3C3C3C) else Color(0xFFDCDCDC),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).alpha(if (showCaption) 1f else 0f)
-            )
+        AnimatedContent(
+            targetState = panelOpen,
+            transitionSpec = {
+                if (targetState) {
+                    (expandVertically(animationSpec = tween(230), expandFrom = Alignment.Top) + fadeIn(tween(160))) togetherWith
+                        fadeOut(tween(90))
+                } else {
+                    fadeIn(tween(90)) togetherWith
+                        (shrinkVertically(animationSpec = tween(210), shrinkTowards = Alignment.Top) + fadeOut(tween(140)))
+                }
+            },
+            label = "attachmentPanel"
+        ) { open ->
+            if (open) {
+                AttachmentPanel(
+                    recent = recentMedia,
+                    selected = panelPicked.map { it.id }.toSet(),
+                    permissionGranted = recentMedia.isNotEmpty(),
+                    onToggle = onToggleRecent,
+                    onCamera = onCamera,
+                    onGallery = onOpenGallery,
+                    onFiles = onPickAttachment
+                )
+            } else {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Spacer(Modifier.height(3.3.dp))
+                    Text(
+                        text = "回答由 AI 生成，仅供参考",
+                        fontSize = 10.5.sp,
+                        lineHeight = 12.sp,
+                        color = if (c.dark) Color(0xFF3C3C3C) else Color(0xFFDCDCDC),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp).alpha(if (showCaption) 1f else 0f)
+                    )
+                }
+            }
         }
     }
 }

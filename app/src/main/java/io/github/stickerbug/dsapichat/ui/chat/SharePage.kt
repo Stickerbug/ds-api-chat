@@ -57,6 +57,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import io.github.stickerbug.dsapichat.ui.markdown.MarkdownBody
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
@@ -190,13 +191,12 @@ internal fun SharePage(
             Row(
                 modifier = Modifier
                     .fillMaxWidth(),
-                horizontalArrangement = if (wideContent) {
-                    Arrangement.spacedBy(37.2.dp, Alignment.CenterHorizontally)
-                } else Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.spacedBy(37.7.dp, Alignment.CenterHorizontally)
             ) {
                 ShareActionButton(
                     label = "生成图片",
-                    iconRes = R.drawable.ic_photo_outline_20,
+                    iconRes = R.drawable.ic_photo_filled_20,
+                    iconSize = 18.dp,
                     background = SHARE_BLUE,
                     tint = Color.White
                 ) {
@@ -245,6 +245,7 @@ internal fun SharePage(
                 ShareActionButton(
                     label = "更多分享",
                     iconRes = R.drawable.ic_ellipsis_outline,
+                    iconSize = 20.dp,
                     background = SHARE_PALE,
                     tint = SHARE_INDIGO
                 ) {
@@ -290,6 +291,7 @@ private fun SelectCircle(selected: Boolean, onClick: () -> Unit) {
 private fun ShareActionButton(
     label: String,
     iconRes: Int,
+    iconSize: Dp = 22.dp,
     background: Color,
     tint: Color,
     onClick: () -> Unit
@@ -307,7 +309,7 @@ private fun ShareActionButton(
             Icon(
                 painter = painterResource(id = iconRes),
                 contentDescription = label,
-                modifier = Modifier.size(22.dp),
+                modifier = Modifier.size(iconSize),
                 tint = tint
             )
         }

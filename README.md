@@ -13,7 +13,8 @@
 - **会话管理**：重命名、置顶、多选、删除，搜索本机会话
 - **设置**：语言、外观（系统/浅色/深色）、字体大小（含跟随系统）、朗读音色、个性化、数据管理
 - **数据管理**：**导入 DeepSeek 官方「导出所有历史对话」zip**、导入本应用 JSON 备份、导出全部对话、清空数据
-- **分享页**：全选 / 生成图片 / 复制链接 / 分享到微信 / 更多分享
+- **分享页**：全选 / 生成图片 / 复制链接 / 分享到微信 / 更多分享，圆钮与图标按官方逐像素校准
+- **过渡动画**：分享页整页滑入、长按菜单缩放缓入、附件面板展开/收起、相册选择器滑入、设置子页左右滑入
 - **平板 / 宽屏**：屏幕宽 ≥760dp 时聊天、分享页、附件面板自动限宽居中，设置页限宽 720dp，相册网格按屏宽自适应列数；手机布局保持不变
 
 ## 截图
@@ -26,7 +27,7 @@
 
 1. 到 [Releases](https://github.com/Stickerbug/ds-api-chat/releases/latest) 下载最新的 `DS-API-Chat-<版本>.apk`。
 2. 在手机上允许「安装未知应用」，安装 APK（要求 Android 8.0+，minSdk 26）。
-3. 也可以用 adb：`adb install -r DS-API-Chat-1.0.2.apk`。
+3. 也可以用 adb：`adb install -r DS-API-Chat-1.0.4.apk`。
 4. 打开 App → 侧栏「设置」→「接口」：
    - **API Key**：在 [platform.deepseek.com](https://platform.deepseek.com/api_keys) 申请
    - **接口地址**：默认 `https://api.deepseek.com`
@@ -46,7 +47,8 @@ API Key 只保存在本机应用私有目录（SharedPreferences），除发送�
 导出：设置 → 数据管理 → **导出所有历史对话**，会把全部对话写成 JSON 备份；该 JSON 也能再导入。
 
 导入格式兼容：
-- DeepSeek 官方导出 zip（内含 `conversations.json`，`mapping` 节点树 + `REQUEST / RESPONSE / THINK / SEARCH` fragments）
+- DeepSeek 官方「导出所有历史对话」zip：当前版本导出格式（`chat_sessions/<uuid>.json` 每会话一个文件 + `chat_session_index.json`，附件目录 `<uuid>_files/` 里的图片会一并导入）
+- 旧版官方导出（内含 `conversations.json`，`mapping` 节点树 + `REQUEST / RESPONSE / THINK / SEARCH` fragments）
 - 本应用导出的对话 JSON 数组
 
 ## 构建
@@ -96,6 +98,8 @@ app/src/main/java/io/github/stickerbug/dsapichat/
 
 ## 更新日志
 
+- **1.0.4**：修复导入 DeepSeek 官方新版「导出所有历史对话」zip（`chat_sessions/*.json` 逐会话格式）失败的问题；分享页 4 个圆钮按官方重新校准（生成图片改用实心相片图标、更多分享图标缩到 20dp、圆钮间距 37.7dp 居中）；新增官方风格过渡动画（分享页、长按菜单、附件面板、相册选择器、设置子页）；侧栏「多选」图标换成官方 18dp 矢量。
+- **1.0.3**：平板宽屏下「朗读音色」面板的确认按钮改为居中限宽（516dp），不再横贯整屏；深色模式下侧栏/消息长按菜单的分隔线改用深灰（#3A3A3E），不再刺眼。
 - **1.0.2**：修正侧栏「多选」按钮与长按菜单图标——按官方基准重绘 checklist 图标（双圆 + 短横线，ink 13.3×12.7dp），菜单图标盒统一 18dp、文字列与官方对齐。
 - **1.0.1**：平板 / 宽屏适配——聊天与分享页内容区限宽 760dp 居中、附件面板限宽 560dp、设置页限宽 720dp、相册网格按屏宽自适应列数；「回到底部」按钮跟随内容区右缘。
 - **1.0.0**：首个版本（聊天、附件、分享页、导入导出、深浅色、设置页等）。
