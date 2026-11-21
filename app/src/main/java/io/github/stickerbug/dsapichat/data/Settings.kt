@@ -27,7 +27,13 @@ data class Settings(
     val ttsBaseUrl: String = "",
     val ttsApiKey: String = "",
     val ttsModel: String = "",
-    val ttsVoice: String = ""
+    val ttsVoice: String = "",
+    /** 朗读方式：auto=有云端配置用云端、否则本地；cloud=强制云端（未配置则提示不可用）；local=强制本地系统引擎。 */
+    val ttsMode: String = "auto",
+    /** 语音识别方式：auto=有云端配置用云端、否则系统；cloud=强制云端（未配置则提示不可用）；system=强制系统识别。 */
+    val asrMode: String = "auto",
+    /** 本地系统朗读语速。 */
+    val ttsLocalSpeed: Float = 1.0f
 ) {
     val reasoner: Boolean get() = model.contains("reasoner")
 }
@@ -56,7 +62,10 @@ class SettingsStore(context: Context) {
             ttsBaseUrl = sp.getString("tts_base_url", "") ?: "",
             ttsApiKey = sp.getString("tts_api_key", "") ?: "",
             ttsModel = sp.getString("tts_model", "") ?: "",
-            ttsVoice = sp.getString("tts_voice", "") ?: ""
+            ttsVoice = sp.getString("tts_voice", "") ?: "",
+            ttsMode = sp.getString("tts_mode", "auto") ?: "auto",
+            asrMode = sp.getString("asr_mode", "auto") ?: "auto",
+            ttsLocalSpeed = sp.getFloat("tts_local_speed", 1.0f)
         )
     )
     val settings: StateFlow<Settings> = _settings
@@ -85,6 +94,9 @@ class SettingsStore(context: Context) {
             .putString("tts_api_key", s.ttsApiKey)
             .putString("tts_model", s.ttsModel)
             .putString("tts_voice", s.ttsVoice)
+            .putString("tts_mode", s.ttsMode)
+            .putString("asr_mode", s.asrMode)
+            .putFloat("tts_local_speed", s.ttsLocalSpeed)
             .apply()
         _settings.value = s
     }

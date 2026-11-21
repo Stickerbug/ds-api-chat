@@ -288,7 +288,18 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
         }
     }
     fun startVoiceNow() {
-        if (settings.asrBaseUrl.isNotBlank()) {
+        val mode = settings.asrMode
+        val cloudReady = settings.asrBaseUrl.isNotBlank()
+        val useCloud = mode == "cloud" || (mode != "system" && cloudReady)
+        if (useCloud) {
+            if (!cloudReady) {
+                Toast.makeText(
+                    context,
+                    "云端语音识别未配置：请到「设置 - 语音 - 语音识别」填写接口，或把识别方式改为「系统」",
+                    Toast.LENGTH_LONG
+                ).show()
+                return
+            }
             if (voiceRecorder.start()) {
                 voiceState = VoiceState.Recording
             } else {

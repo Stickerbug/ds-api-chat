@@ -109,6 +109,13 @@ private val FOOT = Color(0xFF595959)
 private val DIV = Color(0xFFEDEDEF)
 private val DIV_D = Color(0xFF3A3A3E)
 private val BRAND = Color(0xFF4D6BFE)
+private const val ASR_OPENAI_BASE = "https://api.openai.com/v1"
+private const val ASR_GROQ_BASE = "https://api.groq.com/openai/v1"
+private const val ASR_SF_BASE = "https://api.siliconflow.cn/v1"
+private const val TTS_OPENAI_BASE = "https://api.openai.com/v1"
+private const val TTS_GROQ_BASE = "https://api.groq.com/openai/v1"
+private const val TTS_SF_BASE = "https://api.siliconflow.cn/v1"
+
 private val RED = Color(0xFFE04B4B)
 private val SWITCH_GREEN = Color(0xFF22C55E)
 private val SWITCH_OFF = Color(0xFFE5E5E5)
@@ -384,12 +391,20 @@ private fun MainPage(s: DsSettings, openPage: (Page) -> Unit, openDlg: (Dlg) -> 
                 IconRow(
                     R.drawable.ic_mic_filled_20,
                     "语音识别",
-                    value = if (s.asrBaseUrl.isNotBlank()) "已配置" else "系统识别"
+                    value = when (s.asrMode) {
+                        "cloud" -> if (s.asrBaseUrl.isNotBlank()) "云端" else "云端（未配置）"
+                        "system" -> "系统识别"
+                        else -> if (s.asrBaseUrl.isNotBlank()) "自动（云端）" else "自动（系统）"
+                    }
                 ) { openDlg(Dlg.Asr) }
                 IconRow(
                     R.drawable.ic_voice_outline_26,
                     "朗读合成",
-                    value = if (s.ttsBaseUrl.isNotBlank()) "云端" else "系统"
+                    value = when (s.ttsMode) {
+                        "cloud" -> if (s.ttsBaseUrl.isNotBlank()) "云端" else "云端（未配置）"
+                        "local" -> "本地"
+                        else -> if (s.ttsBaseUrl.isNotBlank()) "自动（云端）" else "自动（系统）"
+                    }
                 ) { openDlg(Dlg.Tts) }
             }
         }
@@ -1224,23 +1239,79 @@ private fun TextInputDialog(
 }
 
 @Composable
+private fun ChipRow(options: List<String>, selected: String, onSelect: (String) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        options.forEach { opt ->
+            val sel = opt == selected
+            Box(
+                modifier = Modifier
+                    .background(
+                        if (sel) BRAND.copy(alpha = 0.14f)
+                        else (if (Ds.color.dark) Ds.color.field else Color(0xFFF5F5F5)),
+                        RoundedCornerShape(9.dp)
+                    )
+                    .clickable { onSelect(opt) }
+                    .padding(horizontal = 12.dp, vertical = 7.dp)
+            ) {
+                Text(
+                    text = opt,
+                    fontSize = 13.sp,
+                    fontWeight = if (sel) FontWeight.Medium else FontWeight.Normal,
+                    color = if (sel) BRAND else inkColor()
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun AsrDialog(
     s: DsSettings,
     onDismiss: () -> Unit,
     onSave: (DsSettings) -> Unit
 ) {
+    val context = LocalContext.current
+    var mode by remember { mutableStateOf(if (s.asrMode == "cloud" || s.asrMode == "system") s.asrMode else "auto") }
     var base by remember { mutableStateOf(s.asrBaseUrl) }
     var key by remember { mutableStateOf(s.asrApiKey) }
     var model by remember { mutableStateOf(s.asrModel) }
+    val preset = when (base) {
+        ASR_OPENAI_BASE -> "OpenAI"
+        ASR_GROQ_BASE -> "Groq"
+        ASR_SF_BASE -> "SiliconFlow"
+        else -> "自定义"
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("语音识别", fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
         text = {
             Column {
                 Text(
-                    "本机没有可用的语音识别服务时，可配置 OpenAI 兼容的云端识别接口（POST /audio/transcriptions）。留空则只用系统识别。",
+                    "识别方式：自动 = 填了云端接口就用云端，否则用系统识别；云端 = 必须填接口，没填会提示不可用；系统 = 只用本机识别（部分机型已被移除）。",
                     fontSize = 13.sp, color = MUTED, lineHeight = 19.sp
                 )
+                Spacer(Modifier.height(12.dp))
+                Text("识别方式", fontSize = 12.5.sp, color = MUTED)
+                Spacer(Modifier.height(6.dp))
+                ChipRow(
+                    options = listOf("自动", "云端", "系统"),
+                    selected = when (mode) { "cloud" -> "云端"; "system" -> "系统"; else -> "自动" }
+                ) { label ->
+                    mode = when (label) { "云端" -> "cloud"; "系统" -> "system"; else -> "auto" }
+                }
+                Spacer(Modifier.height(12.dp))
+                Text("快速预设（可修改）", fontSize = 12.5.sp, color = MUTED)
+                Spacer(Modifier.height(6.dp))
+                ChipRow(
+                    options = listOf("OpenAI", "Groq", "SiliconFlow", "自定义"),
+                    selected = preset
+                ) { p ->
+                    when (p) {
+                        "OpenAI" -> { base = ASR_OPENAI_BASE; model = "whisper-1" }
+                        "Groq" -> { base = ASR_GROQ_BASE; model = "whisper-large-v3-turbo" }
+                        "SiliconFlow" -> { base = ASR_SF_BASE; model = "FunAudioLLM/SenseVoiceSmall" }
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
                 AsrField(base, { base = it }, "接口地址", "https://api.openai.com/v1")
                 Spacer(Modifier.height(8.dp))
@@ -1251,7 +1322,11 @@ private fun AsrDialog(
         },
         confirmButton = {
             TextButton(onClick = {
-                onSave(s.copy(asrBaseUrl = base.trim(), asrApiKey = key.trim(), asrModel = model.trim()))
+                val nb = base.trim()
+                if (mode == "cloud" && nb.isEmpty()) {
+                    Toast.makeText(context, "已保存；云端接口还没填，语音输入时会提示不可用", Toast.LENGTH_LONG).show()
+                }
+                onSave(s.copy(asrMode = mode, asrBaseUrl = nb, asrApiKey = key.trim(), asrModel = model.trim()))
             }) { Text("保存", color = BRAND) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消", color = MUTED) } },
@@ -1266,19 +1341,50 @@ private fun TtsDialog(
     onDismiss: () -> Unit,
     onSave: (DsSettings) -> Unit
 ) {
+    val context = LocalContext.current
+    var mode by remember { mutableStateOf(if (s.ttsMode == "cloud" || s.ttsMode == "local") s.ttsMode else "auto") }
     var base by remember { mutableStateOf(s.ttsBaseUrl) }
     var key by remember { mutableStateOf(s.ttsApiKey) }
     var model by remember { mutableStateOf(s.ttsModel) }
     var voice by remember { mutableStateOf(s.ttsVoice) }
+    var speed by remember { mutableStateOf(if (s.ttsLocalSpeed in listOf(0.8f, 1.0f, 1.2f, 1.5f)) s.ttsLocalSpeed else 1.0f) }
+    val preset = when (base) {
+        TTS_OPENAI_BASE -> "OpenAI"
+        TTS_GROQ_BASE -> "Groq"
+        TTS_SF_BASE -> "SiliconFlow"
+        else -> "自定义"
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("朗读合成", fontSize = 17.sp, fontWeight = FontWeight.SemiBold) },
         text = {
             Column {
                 Text(
-                    "配置 OpenAI 兼容的云端语音合成接口（POST /audio/speech），朗读音色更自然，且不依赖系统语音引擎。留空则用系统朗读。",
+                    "朗读方式：自动 = 填了云端接口就用云端，否则用系统朗读；云端 = 必须填接口，没填会提示不可用；本地 = 系统语音引擎（可调语速）。云端合成更自然，且不依赖系统引擎。",
                     fontSize = 13.sp, color = MUTED, lineHeight = 19.sp
                 )
+                Spacer(Modifier.height(12.dp))
+                Text("朗读方式", fontSize = 12.5.sp, color = MUTED)
+                Spacer(Modifier.height(6.dp))
+                ChipRow(
+                    options = listOf("自动", "云端", "本地"),
+                    selected = when (mode) { "cloud" -> "云端"; "local" -> "本地"; else -> "自动" }
+                ) { label ->
+                    mode = when (label) { "云端" -> "cloud"; "本地" -> "local"; else -> "auto" }
+                }
+                Spacer(Modifier.height(12.dp))
+                Text("快速预设（可修改）", fontSize = 12.5.sp, color = MUTED)
+                Spacer(Modifier.height(6.dp))
+                ChipRow(
+                    options = listOf("OpenAI", "Groq", "SiliconFlow", "自定义"),
+                    selected = preset
+                ) { p ->
+                    when (p) {
+                        "OpenAI" -> { base = TTS_OPENAI_BASE; model = "tts-1"; voice = "alloy" }
+                        "Groq" -> { base = TTS_GROQ_BASE; model = "playai-tts"; voice = "Fritz-PlayAI" }
+                        "SiliconFlow" -> { base = TTS_SF_BASE; model = "FunAudioLLM/CosyVoice2-0.5B"; voice = "alex" }
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
                 AsrField(base, { base = it }, "接口地址", "https://api.openai.com/v1")
                 Spacer(Modifier.height(8.dp))
@@ -1287,11 +1393,33 @@ private fun TtsDialog(
                 AsrField(model, { model = it }, "模型", "tts-1")
                 Spacer(Modifier.height(8.dp))
                 AsrField(voice, { voice = it }, "音色", "alloy")
+                Spacer(Modifier.height(12.dp))
+                Text("本地朗读语速", fontSize = 12.5.sp, color = MUTED)
+                Spacer(Modifier.height(6.dp))
+                ChipRow(
+                    options = listOf("0.8×", "1.0×", "1.2×", "1.5×"),
+                    selected = when (speed) { 0.8f -> "0.8×"; 1.2f -> "1.2×"; 1.5f -> "1.5×"; else -> "1.0×" }
+                ) { label ->
+                    speed = when (label) { "0.8×" -> 0.8f; "1.2×" -> 1.2f; "1.5×" -> 1.5f; else -> 1.0f }
+                }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                onSave(s.copy(ttsBaseUrl = base.trim(), ttsApiKey = key.trim(), ttsModel = model.trim(), ttsVoice = voice.trim()))
+                val nb = base.trim()
+                if (mode == "cloud" && nb.isEmpty()) {
+                    Toast.makeText(context, "已保存；云端接口还没填，朗读时会提示不可用", Toast.LENGTH_LONG).show()
+                }
+                onSave(
+                    s.copy(
+                        ttsMode = mode,
+                        ttsBaseUrl = nb,
+                        ttsApiKey = key.trim(),
+                        ttsModel = model.trim(),
+                        ttsVoice = voice.trim(),
+                        ttsLocalSpeed = speed
+                    )
+                )
             }) { Text("保存", color = BRAND) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消", color = MUTED) } },

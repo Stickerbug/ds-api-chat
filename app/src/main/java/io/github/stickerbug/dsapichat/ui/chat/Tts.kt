@@ -204,15 +204,28 @@ object TtsController {
         }
     }
 
+    /** 本地系统引擎语速（来自设置）。 */
+    private var localRate = 1.0f
+
     fun speak(context: Context, id: String, text: String) {
         stop()
         val clean = sanitize(text)
         if (clean.isBlank()) return
         val s = runCatching { SettingsStore(context).current() }.getOrNull()
-        if (s != null && s.ttsBaseUrl.isNotBlank()) {
-            startCloudSpeak(context, id, clean, s)
+        val mode = s?.ttsMode ?: "auto"
+        val cloudReady = s != null && s.ttsBaseUrl.isNotBlank()
+        val useCloud = s != null && (mode == "cloud" || (mode == "auto" && cloudReady))
+        if (useCloud) {
+            if (!cloudReady) {
+                // 用户明确选择云端但没填接口：不动系统引擎，直接提示不可用。
+                speakingId = null
+                Toast.makeText(context, "云端朗读未配置：请到「设置 - 语音 - 朗读合成」填写接口，或把朗读方式改为「本地」", Toast.LENGTH_LONG).show()
+                return
+            }
+            startCloudSpeak(context, id, clean, s!!)
             return
         }
+        localRate = (s?.ttsLocalSpeed ?: 1.0f).coerceIn(0.5f, 2.0f)
         ensure(context)
         if (engine == null) {
             speakingId = null
@@ -244,6 +257,7 @@ object TtsController {
         }
         rootId = id
         pending = chunks.size
+        runCatching { e.setSpeechRate(localRate) }
         chunks.forEachIndexed { i, chunk ->
             val mode = if (i == 0) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
             val params = Bundle()
