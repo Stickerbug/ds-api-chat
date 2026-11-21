@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -64,6 +65,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
@@ -157,7 +159,14 @@ fun SettingsRoute(vm: AppViewModel, onBack: () -> Unit) {
         SettingsTopBar(title = title) {
             if (page == Page.Main) onBack() else page = Page.Main
         }
-        Box(Modifier.weight(1f)) {
+        // 平板宽屏（≥760dp）时设置列限宽 720dp 居中；手机屏宽 361dp，像素不变。
+        val wideContent = LocalConfiguration.current.screenWidthDp >= 760
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .then(if (wideContent) Modifier.width(720.dp) else Modifier.fillMaxWidth())
+            ) {
             when (page) {
                 Page.Main -> MainPage(s, openPage = { page = it }, openDlg = { dlg = it }, save = { vm.saveSettings(it) })
                 Page.Account -> AccountPage(openDlg = { dlg = it })
@@ -171,6 +180,7 @@ fun SettingsRoute(vm: AppViewModel, onBack: () -> Unit) {
                 )
                 Page.Personalize -> PersonalizePage(s, save = { vm.saveSettings(it) })
                 Page.FontSize -> FontSizePage(s, save = { vm.saveSettings(it) })
+            }
             }
         }
     }

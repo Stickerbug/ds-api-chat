@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -28,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -48,6 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -97,6 +100,8 @@ internal fun SharePage(
     BackHandler { onClose() }
 
     val selectedText = messages.filter { selected.contains(it.id) }.joinToString("\n\n") { it.text }
+    // 平板宽屏（≥760dp）：答案卡列限宽 760dp、sheet 内容限宽 500dp，整体居中；手机像素不变。
+    val wideContent = LocalConfiguration.current.screenWidthDp >= 760
 
     Box(modifier = Modifier.fillMaxSize().background(c.bg)) {
         Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
@@ -113,8 +118,11 @@ internal fun SharePage(
                 Spacer(Modifier.width(10.dp))
                 Text(text = "全选", fontSize = 16.sp, color = c.textPrimary)
             }
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             LazyColumn(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .then(if (wideContent) Modifier.width(760.dp) else Modifier.fillMaxWidth()),
                 contentPadding = PaddingValues(start = 14.7.dp, end = 14.7.dp, top = 6.dp, bottom = 250.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -142,6 +150,7 @@ internal fun SharePage(
                     }
                 }
             }
+            }
         }
 
         // 底部 sheet
@@ -152,8 +161,12 @@ internal fun SharePage(
                 .clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
                 .background(if (c.dark) Color(0xFF242424) else Color.White)
                 .navigationBarsPadding()
-                .padding(horizontal = 22.dp)
         ) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+            Column(
+                modifier = (if (wideContent) Modifier.width(500.dp) else Modifier.fillMaxWidth())
+                    .padding(horizontal = 22.dp)
+            ) {
             Spacer(Modifier.height(22.7.dp))
             Box(modifier = Modifier.fillMaxWidth().height(51.3.dp)) {
                 Text(
@@ -177,7 +190,9 @@ internal fun SharePage(
             Row(
                 modifier = Modifier
                     .fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = if (wideContent) {
+                    Arrangement.spacedBy(37.2.dp, Alignment.CenterHorizontally)
+                } else Arrangement.SpaceBetween
             ) {
                 ShareActionButton(
                     label = "生成图片",
@@ -242,6 +257,8 @@ internal fun SharePage(
                 }
             }
             Spacer(Modifier.height(4.3.dp))
+            }
+            }
         }
     }
 }

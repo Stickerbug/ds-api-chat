@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -51,6 +52,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
@@ -62,6 +64,7 @@ import io.github.stickerbug.dsapichat.R
 import io.github.stickerbug.dsapichat.ui.theme.Ds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.math.roundToInt
 
 /** 相册里的一张图片（官方附件面板/相册选择器都用它）。 */
 data class LocalMedia(val id: Long, val uri: Uri)
@@ -125,8 +128,11 @@ fun AttachmentPanel(
     onFiles: () -> Unit
 ) {
     val c = Ds.color
+    // 平板宽屏时面板内容限宽 560dp 居中；手机宽度不足 560dp，像素不变。
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
     Column(
         modifier = Modifier
+            .widthIn(max = 560.dp)
             .fillMaxWidth()
             .padding(top = 18.dp, bottom = 41.dp)
             .navigationBarsPadding()
@@ -201,6 +207,7 @@ fun AttachmentPanel(
             PanelButton(R.drawable.ic_photo_outline_20, "相册", Modifier.weight(1f), onGallery)
             PanelButton(R.drawable.ic_paperclip_outline_20, "文件", Modifier.weight(1f), onFiles)
         }
+    }
     }
 }
 
@@ -325,7 +332,10 @@ private fun MediaPickerContent(
         }
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             LazyVerticalGrid(
-                columns = GridCells.Fixed(4),
+                // 手机 4 列（每列 90dp），平板按屏宽自适应列数。
+                columns = GridCells.Fixed(
+                    (LocalConfiguration.current.screenWidthDp / 90f).roundToInt().coerceAtLeast(4)
+                ),
                 modifier = Modifier.fillMaxSize(),
                 horizontalArrangement = Arrangement.spacedBy(2.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)

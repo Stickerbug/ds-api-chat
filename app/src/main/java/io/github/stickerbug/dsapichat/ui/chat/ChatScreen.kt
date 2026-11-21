@@ -102,6 +102,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -370,7 +371,9 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
                 }
             )
 
-            Box(modifier = Modifier.weight(1f)) {
+            // 平板宽屏（screenWidthDp ≥ 760）时内容区限宽 760dp 居中；手机屏宽 361dp，像素不变。
+            val wideContent = LocalConfiguration.current.screenWidthDp >= 760
+            Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                 if (messages.isEmpty()) {
                     WelcomePane(returning = returning)
                 } else {
@@ -383,7 +386,9 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
                     ) {
                         LazyColumn(
                             state = listState,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .then(if (wideContent) Modifier.width(760.dp) else Modifier.fillMaxWidth()),
                             contentPadding = PaddingValues(horizontal = 0.dp, vertical = 20.dp)
                         ) {
                             items(items = messages, key = { it.id }) { m ->
@@ -413,7 +418,10 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
                     exit = fadeOut(tween(120)),
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(end = 23.dp, bottom = 17.6.dp)
+                        .padding(
+                            end = if (wideContent) (23 + (LocalConfiguration.current.screenWidthDp - 760) / 2).dp else 23.dp,
+                            bottom = 17.6.dp
+                        )
                 ) {
                     Box(
                         modifier = Modifier
@@ -451,6 +459,10 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
                 }
             }
 
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+            Column(
+                modifier = if (wideContent) Modifier.width(760.dp) else Modifier.fillMaxWidth()
+            ) {
             if (error != null && error != "auth") {
                 ErrorBanner(text = errText(error), onOpenSettings = onOpenSettings)
             }
@@ -500,6 +512,8 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
                 onVoice = { startVoice() },
                 showCaption = messages.isNotEmpty() && !panelOpen
             )
+            }
+            }
         }
     }
 
