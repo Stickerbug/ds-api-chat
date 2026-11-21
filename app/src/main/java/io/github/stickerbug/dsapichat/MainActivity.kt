@@ -9,6 +9,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -98,13 +105,26 @@ private fun DsAppRoot(vm: AppViewModel, forceReturning: Boolean) {
             Box(Modifier.fillMaxSize().statusBarsPadding()) {
                 var route by remember { mutableStateOf(Route.Chat) }
                 BackHandler(enabled = route != Route.Chat) { route = Route.Chat }
-                when (route) {
-                    Route.Chat -> ChatRoute(
-                        vm = vm,
-                        onOpenSettings = { route = Route.Settings },
-                        forceReturning = forceReturning
-                    )
-                    Route.Settings -> SettingsRoute(vm = vm, onBack = { route = Route.Chat })
+                // 官方 2.8.0：进入设置页时聊天页与设置页交叉淡入（~250ms）；从设置返回为瞬切。
+                AnimatedContent(
+                    targetState = route,
+                    transitionSpec = {
+                        if (targetState == Route.Settings) {
+                            fadeIn(tween(250)) togetherWith fadeOut(tween(250))
+                        } else {
+                            EnterTransition.None togetherWith ExitTransition.None
+                        }
+                    },
+                    label = "route"
+                ) { r ->
+                    when (r) {
+                        Route.Chat -> ChatRoute(
+                            vm = vm,
+                            onOpenSettings = { route = Route.Settings },
+                            forceReturning = forceReturning
+                        )
+                        Route.Settings -> SettingsRoute(vm = vm, onBack = { route = Route.Chat })
+                    }
                 }
             }
         }

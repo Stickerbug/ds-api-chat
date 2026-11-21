@@ -52,13 +52,12 @@ internal data class MenuEntry(
 @Composable
 internal fun MessageMenuOverlay(entries: List<MenuEntry>, onDismiss: () -> Unit) {
     val c = Ds.color
-    // 弹出动画：遮罩 0→0.2 淡入，卡片 0.9→1 缩放 + 淡入（官方菜单是弹出而非瞬现）。
+    // 官方平板实测：长按菜单无遮罩变暗、无位移动画，约 80–130ms 快速淡入，关闭瞬切。
     val appear = remember { Animatable(0f) }
-    LaunchedEffect(Unit) { appear.animateTo(1f, tween(170, easing = FastOutSlowInEasing)) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, tween(110, easing = FastOutSlowInEasing)) }
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.20f * appear.value))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -71,8 +70,8 @@ internal fun MessageMenuOverlay(entries: List<MenuEntry>, onDismiss: () -> Unit)
                 .offset(x = (-14).dp)
                 .width(190.3.dp)
                 .graphicsLayer {
-                    scaleX = 0.90f + 0.10f * appear.value
-                    scaleY = 0.90f + 0.10f * appear.value
+                    scaleX = 0.96f + 0.04f * appear.value
+                    scaleY = 0.96f + 0.04f * appear.value
                     alpha = appear.value
                 }
                 .clip(RoundedCornerShape(14.dp))

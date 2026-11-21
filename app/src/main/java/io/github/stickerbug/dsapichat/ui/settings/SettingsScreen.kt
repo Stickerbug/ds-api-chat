@@ -10,6 +10,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -51,6 +53,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -65,6 +68,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -176,17 +180,11 @@ fun SettingsRoute(vm: AppViewModel, onBack: () -> Unit) {
                     .fillMaxHeight()
                     .then(if (wideContent) Modifier.width(720.dp) else Modifier.fillMaxWidth())
             ) {
-            // 子页切换动画：进入子页从右侧滑入，返回设置主页从左侧滑入。
+            // 子页切换动画：官方为纯交叉淡入（~250ms），没有横向位移。
             AnimatedContent(
                 targetState = page,
                 transitionSpec = {
-                    if (targetState == Page.Main) {
-                        (slideInHorizontally(animationSpec = tween(240)) { -it / 4 } + fadeIn(tween(180))) togetherWith
-                            (slideOutHorizontally(animationSpec = tween(240)) { it / 4 } + fadeOut(tween(120)))
-                    } else {
-                        (slideInHorizontally(animationSpec = tween(240)) { it / 4 } + fadeIn(tween(180))) togetherWith
-                            (slideOutHorizontally(animationSpec = tween(240)) { -it / 4 } + fadeOut(tween(120)))
-                    }
+                    fadeIn(animationSpec = tween(250)) togetherWith fadeOut(animationSpec = tween(250))
                 },
                 label = "settingsPage"
             ) { p ->
@@ -913,19 +911,43 @@ private fun RadioDialog(
     onConfirm: (String) -> Unit
 ) {
     var sel by remember { mutableStateOf(selected) }
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+    // 官方外观/语言弹窗：遮罩与卡片同步淡入（~180ms），无缩放无位移；关闭 ~140ms。
+    var closing by remember { mutableStateOf(false) }
+    var afterClose by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val anim = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { anim.animateTo(1f, tween(190, easing = FastOutSlowInEasing)) }
+    LaunchedEffect(closing) {
+        if (closing) {
+            anim.animateTo(0f, tween(150))
+            afterClose?.invoke()
+        }
+    }
+    fun closeThen(after: () -> Unit) {
+        if (!closing) {
+            afterClose = after
+            closing = true
+        }
+    }
+    Dialog(
+        onDismissRequest = { closeThen(onDismiss) },
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+        LaunchedEffect(Unit) { dialogWindow?.setDimAmount(0f) }
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.54f * anim.value))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
-                ) { onDismiss() },
+                ) { closeThen(onDismiss) },
             contentAlignment = Alignment.Center
         ) {
             Column(
                 modifier = Modifier
                     .width(265.dp)
+                    .graphicsLayer { alpha = anim.value }
                     .clip(RoundedCornerShape(14.dp))
                     .background(cardColor())
                     .clickable(
@@ -978,7 +1000,7 @@ private fun RadioDialog(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp)
-                        .clickable { onConfirm(sel) },
+                        .clickable { closeThen { onConfirm(sel) } },
                     contentAlignment = Alignment.Center
                 ) {
                     Text("确认", fontSize = 16.5.sp, color = BRAND, fontWeight = FontWeight.Medium)
@@ -1002,21 +1024,44 @@ private fun RadioDot(selected: Boolean) {
 
 @Composable
 private fun VoiceSheetOverlay(onDismiss: () -> Unit, onConfirm: () -> Unit) {
-    BackHandler { onDismiss() }
-    Box(Modifier.fillMaxSize()) {
+    // 官方朗读音色弹窗：遮罩与面板同步淡入（~220ms），无缩放；关闭 ~160ms。
+    var closing by remember { mutableStateOf(false) }
+    var afterClose by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val anim = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { anim.animateTo(1f, tween(220, easing = FastOutSlowInEasing)) }
+    LaunchedEffect(closing) {
+        if (closing) {
+            anim.animateTo(0f, tween(160))
+            afterClose?.invoke()
+        }
+    }
+    fun closeThen(after: () -> Unit) {
+        if (!closing) {
+            afterClose = after
+            closing = true
+        }
+    }
+    Dialog(
+        onDismissRequest = { closeThen(onDismiss) },
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)
+    ) {
+        val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+        LaunchedEffect(Unit) { dialogWindow?.setDimAmount(0f) }
+        Box(Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0x53000000))
+                    .background(Color(0x8A000000).copy(alpha = 0.54f * anim.value))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
-                    ) { onDismiss() }
+                    ) { closeThen(onDismiss) }
             )
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
+                    .graphicsLayer { alpha = anim.value }
                     .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
                     .background(if (Ds.color.dark) PAGE_D else Color.White)
                     .navigationBarsPadding()
@@ -1041,7 +1086,7 @@ private fun VoiceSheetOverlay(onDismiss: () -> Unit, onConfirm: () -> Unit) {
                             .size(28.dp)
                             .clip(CircleShape)
                             .background(if (Ds.color.dark) Ds.color.field else Color(0xFFF0F0F2))
-                            .clickable { onDismiss() },
+                            .clickable { closeThen(onDismiss) },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -1107,13 +1152,14 @@ private fun VoiceSheetOverlay(onDismiss: () -> Unit, onConfirm: () -> Unit) {
                         .height(44.dp)
                         .clip(RoundedCornerShape(22.dp))
                         .background(BRAND)
-                        .clickable { onConfirm() },
+                        .clickable { closeThen { onConfirm() } },
                     contentAlignment = Alignment.Center
                 ) {
                     Text("确认", fontSize = 16.5.sp, color = Color.White, fontWeight = FontWeight.Medium)
                 }
                 Spacer(Modifier.height(14.4.dp))
             }
+        }
     }
 }
 

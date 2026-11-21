@@ -27,7 +27,7 @@
 
 1. 到 [Releases](https://github.com/Stickerbug/ds-api-chat/releases/latest) 下载最新的 `DS-API-Chat-<版本>.apk`。
 2. 在手机上允许「安装未知应用」，安装 APK（要求 Android 8.0+，minSdk 26）。
-3. 也可以用 adb：`adb install -r DS-API-Chat-1.0.4.apk`。
+3. 也可以用 adb：`adb install -r DS-API-Chat-1.0.5.apk`。
 4. 打开 App → 侧栏「设置」→「接口」：
    - **API Key**：在 [platform.deepseek.com](https://platform.deepseek.com/api_keys) 申请
    - **接口地址**：默认 `https://api.deepseek.com`
@@ -98,6 +98,7 @@ app/src/main/java/io/github/stickerbug/dsapichat/
 
 ## 更新日志
 
+- **1.0.5**：用 scrcpy 60fps 录屏对官方 2.8.0 逐帧校准全部过渡动画——设置页/子页改为交叉淡入 250ms（去掉横向滑动、返回瞬切）、外观/语言弹窗纯淡入淡出 190/150ms、朗读音色弹窗 220/160ms（无缩放）、分享页打开约 200ms 淡入+关闭瞬切、长按消息菜单去遮罩并 140ms 轻缩放、附件面板展开 260ms / 收起 240ms easeOutCubic、相册选择器 110ms 淡入、侧栏多选进入 220ms / 退出 240ms（标题交叉淡入、选择圈横向展开）、思考块展开 130ms。
 - **1.0.4**：修复导入 DeepSeek 官方新版「导出所有历史对话」zip（`chat_sessions/*.json` 逐会话格式）失败的问题；分享页 4 个圆钮按官方重新校准（47.3dp 圆钮、圆心间距 85dp 居中、生成图片改用实心相片图标 18dp、更多分享图标 20dp、标题与关闭键字号颜色对齐）；新增官方风格过渡动画（分享页、长按菜单、附件面板、相册选择器、设置子页）；侧栏「多选」图标换成官方 18dp 矢量。
 - **1.0.3**：平板宽屏下「朗读音色」面板的确认按钮改为居中限宽（516dp），不再横贯整屏；深色模式下侧栏/消息长按菜单的分隔线改用深灰（#3A3A3E），不再刺眼。
 - **1.0.2**：修正侧栏「多选」按钮与长按菜单图标——按官方基准重绘 checklist 图标（双圆 + 短横线，ink 13.3×12.7dp），菜单图标盒统一 18dp、文字列与官方对齐。

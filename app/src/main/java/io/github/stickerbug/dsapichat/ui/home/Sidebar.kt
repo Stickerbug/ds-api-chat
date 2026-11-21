@@ -1,5 +1,15 @@
 package io.github.stickerbug.dsapichat.ui.home
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -150,33 +160,56 @@ fun SidebarContent(
                                 .padding(start = 20.7.dp, end = 22.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = if (gi == 0 && selecting) "已选 ${picked.size} 项" else GROUPS[gi],
-                                fontSize = 13.sp,
-                                lineHeight = 18.sp,
-                                color = MUTED,
-                                modifier = Modifier.weight(1f)
-                            )
                             if (gi == 0) {
-                                if (selecting) {
-                                    Text(
-                                        text = "取消",
-                                        fontSize = 13.sp,
-                                        color = MUTED,
-                                        modifier = Modifier
-                                            .clickable { selecting = false; picked = emptySet() }
-                                            .padding(horizontal = 4.dp)
-                                    )
-                                } else {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_checklist_outline_16),
-                                        contentDescription = "多选",
-                                        modifier = Modifier
-                                            .size(16.dp)
-                                            .clickable { selecting = true; picked = emptySet() },
-                                        tint = MUTED
-                                    )
+                                // 官方：进入/退出多选时标题「今天 → 已选 N 项」与右侧图标交叉淡入（约 200ms）。
+                                AnimatedContent(
+                                    targetState = selecting,
+                                    transitionSpec = {
+                                        fadeIn(tween(220)) togetherWith fadeOut(tween(220))
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    label = "sbHeader"
+                                ) { sel ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = if (sel) "已选 ${picked.size} 项" else GROUPS[gi],
+                                            fontSize = 13.sp,
+                                            lineHeight = 18.sp,
+                                            color = MUTED,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        if (sel) {
+                                            Text(
+                                                text = "取消",
+                                                fontSize = 13.sp,
+                                                color = MUTED,
+                                                modifier = Modifier
+                                                    .clickable { selecting = false; picked = emptySet() }
+                                                    .padding(horizontal = 4.dp)
+                                            )
+                                        } else {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_checklist_outline_16),
+                                                contentDescription = "多选",
+                                                modifier = Modifier
+                                                    .size(16.dp)
+                                                    .clickable { selecting = true; picked = emptySet() },
+                                                tint = MUTED
+                                            )
+                                        }
+                                    }
                                 }
+                            } else {
+                                Text(
+                                    text = GROUPS[gi],
+                                    fontSize = 13.sp,
+                                    lineHeight = 18.sp,
+                                    color = MUTED,
+                                    modifier = Modifier.weight(1f)
+                                )
                             }
                         }
                     }
@@ -207,7 +240,11 @@ fun SidebarContent(
             }
         }
 
-        if (selecting) {
+        AnimatedVisibility(
+            visible = selecting,
+            enter = fadeIn(tween(220)) + expandVertically(tween(220), expandFrom = Alignment.Top),
+            exit = fadeOut(tween(240)) + shrinkVertically(tween(240), shrinkTowards = Alignment.Top)
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -401,26 +438,32 @@ private fun ConversationRow(
                 .padding(start = 20.7.dp, end = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            if (selecting) {
-                Box(
-                    modifier = Modifier
-                        .size(18.dp)
-                        .clip(CircleShape)
-                        .background(if (checked) c.brand else Color.Transparent)
-                        .border(1.2.dp, if (checked) c.brand else Color(0xFFCFD1D6), CircleShape)
-                        .clickable { onToggleSelect() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (checked) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_check_outline_20),
-                            contentDescription = null,
-                            modifier = Modifier.size(13.dp),
-                            tint = Color.White
-                        )
+            AnimatedVisibility(
+                visible = selecting,
+                enter = fadeIn(tween(220)) + expandHorizontally(tween(220), expandFrom = Alignment.Start),
+                exit = fadeOut(tween(240)) + shrinkHorizontally(tween(240), shrinkTowards = Alignment.Start)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(18.dp)
+                            .clip(CircleShape)
+                            .background(if (checked) c.brand else Color.Transparent)
+                            .border(1.2.dp, if (checked) c.brand else Color(0xFFCFD1D6), CircleShape)
+                            .clickable { onToggleSelect() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (checked) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_check_outline_20),
+                                contentDescription = null,
+                                modifier = Modifier.size(13.dp),
+                                tint = Color.White
+                            )
+                        }
                     }
+                    Spacer(Modifier.width(10.dp))
                 }
-                Spacer(Modifier.width(10.dp))
             }
             Text(
                 text = conv.title,

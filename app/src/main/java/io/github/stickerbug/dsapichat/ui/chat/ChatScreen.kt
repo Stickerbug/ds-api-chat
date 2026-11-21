@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -522,10 +523,11 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
         }
     }
 
+        // 官方：相册全屏切换约 100ms 交叉淡入，无上滑。
         AnimatedVisibility(
             visible = galleryOpen,
-            enter = slideInVertically(animationSpec = tween(260)) { it } + fadeIn(tween(180)),
-            exit = slideOutVertically(animationSpec = tween(220)) { it } + fadeOut(tween(160)),
+            enter = fadeIn(tween(110)),
+            exit = fadeOut(tween(90)),
             modifier = Modifier.fillMaxSize()
         ) {
             MediaPickerOverlay(
@@ -550,8 +552,8 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
         val mm = menuMsg ?: lastMenuMsg
         AnimatedVisibility(
             visible = menuOpen,
-            enter = fadeIn(tween(150)),
-            exit = fadeOut(tween(120)),
+            enter = fadeIn(tween(140)),
+            exit = fadeOut(tween(90)),
             modifier = Modifier.fillMaxSize()
         ) {
         if (mm != null) {
@@ -596,10 +598,12 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
         }
         }
 
+        // 官方平板实测：分享 sheet 约 200ms 淡入，关闭瞬切。
         AnimatedVisibility(
             visible = shareOpen,
-            enter = slideInVertically(animationSpec = tween(280)) { it } + fadeIn(tween(220)),
-            exit = slideOutVertically(animationSpec = tween(240)) { it } + fadeOut(tween(180))
+            enter = fadeIn(tween(210)),
+            exit = fadeOut(tween(0)),
+            modifier = Modifier.fillMaxSize()
         ) {
             SharePage(
                 messages = messages.filter { it.role == Role.ASSISTANT && it.text.isNotBlank() },
@@ -887,10 +891,10 @@ private fun ThinkingBlock(m: Msg, streaming: Boolean) {
         }
         AnimatedVisibility(
             visible = expanded && !m.reasoning.isNullOrBlank(),
-            enter = expandVertically(animationSpec = tween(200, easing = FastOutSlowInEasing)) +
-                fadeIn(tween(140)),
-            exit = shrinkVertically(animationSpec = tween(180, easing = FastOutSlowInEasing)) +
-                fadeOut(tween(80))
+            enter = expandVertically(animationSpec = tween(130, easing = FastOutSlowInEasing)) +
+                fadeIn(tween(100)),
+            exit = shrinkVertically(animationSpec = tween(110, easing = FastOutSlowInEasing)) +
+                fadeOut(tween(70))
         ) {
             Row(modifier = Modifier.height(IntrinsicSize.Min).padding(top = 10.dp, start = 7.3.dp)) {
                 Box(
@@ -1363,7 +1367,7 @@ private fun ChatInputBar(
     // 官方：面板展开时输入卡底部不再留导航条间距（面板自带 navigationBarsPadding）。
     val bottomPad by animateDpAsState(
         targetValue = if (imeVisible || panelOpen) 5.3.dp else navBottom + 5.3.dp,
-        animationSpec = tween(220),
+        animationSpec = tween(250, easing = CubicBezierEasing(0.215f, 0.61f, 0.355f, 1f)),
         label = "inputBottomPad"
     )
     Column(
@@ -1462,7 +1466,7 @@ private fun ChatInputBar(
                     ) {
                         val plusRotation by animateFloatAsState(
                             targetValue = if (panelOpen) 45f else 0f,
-                            animationSpec = tween(220),
+                            animationSpec = tween(250),
                             label = "plusRotation"
                         )
                         CircleOutlineButton(
@@ -1513,12 +1517,14 @@ private fun ChatInputBar(
         AnimatedContent(
             targetState = panelOpen,
             transitionSpec = {
+                // 官方实测：展开约 260ms easeOutCubic，收起约 240ms。
+                val outCubic = CubicBezierEasing(0.215f, 0.61f, 0.355f, 1f)
                 if (targetState) {
-                    (expandVertically(animationSpec = tween(230), expandFrom = Alignment.Top) + fadeIn(tween(160))) togetherWith
-                        fadeOut(tween(90))
+                    (expandVertically(animationSpec = tween(260, easing = outCubic), expandFrom = Alignment.Top) + fadeIn(tween(150))) togetherWith
+                        fadeOut(tween(120))
                 } else {
-                    fadeIn(tween(90)) togetherWith
-                        (shrinkVertically(animationSpec = tween(210), shrinkTowards = Alignment.Top) + fadeOut(tween(140)))
+                    fadeIn(tween(120)) togetherWith
+                        (shrinkVertically(animationSpec = tween(240, easing = outCubic), shrinkTowards = Alignment.Top) + fadeOut(tween(150)))
                 }
             },
             label = "attachmentPanel"
