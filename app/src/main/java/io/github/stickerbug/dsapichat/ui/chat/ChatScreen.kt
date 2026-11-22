@@ -37,6 +37,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -367,22 +368,25 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
     val messages = current?.messages ?: emptyList()
     val returning = forceReturning || conversations.isNotEmpty()
     val lastMsg = messages.lastOrNull()
-    // 是否自动贴底：用户手动上滑后停止跟随，滑回底部或点「回到底部」恢复。
+    // 是否自动贴底：用户手动拖动后停止跟随，滑回底部或点「回到底部」恢复。
+    // 只认拖拽状态：isScrollInProgress 会把程序化滚动也算成用户滚动，曾导致流式跟随被永久关掉。
     var followBottom by remember { mutableStateOf(true) }
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.isScrollInProgress }.collect { dragging ->
-            if (dragging) followBottom = !listState.canScrollForward
-        }
+    val isDragged by listState.interactionSource.collectIsDraggedAsState()
+    LaunchedEffect(isDragged) {
+        if (isDragged) followBottom = false
     }
-    // scrollToItem 只把条目顶部对齐；公式/代码等内容还要异步测量，所以逐帧补滚直到真正贴底。
+    val atBottom by remember { derivedStateOf { !listState.canScrollForward } }
+    LaunchedEffect(atBottom, isDragged) {
+        if (atBottom && !isDragged) followBottom = true
+    }
+    // 只向下补滚，不再 scrollToItem 对齐末条消息顶部：长消息比屏幕高时那会先跳上再跳下。
+    // 公式/代码等高度是异步测量的，所以之后几帧继续补滚。
     LaunchedEffect(messages.size, lastMsg?.text?.length, lastMsg?.reasoning?.length) {
         if (messages.isEmpty() || !followBottom) return@LaunchedEffect
-        var guard = 0
-        while (guard++ < 40) {
-            listState.scrollToItem(messages.size - 1)
-            listState.scrollBy(100000f)
+        listState.scrollBy(100000f)
+        repeat(3) {
             withFrameNanos { }
-            if (!listState.canScrollForward) break
+            if (listState.canScrollForward) listState.scrollBy(100000f)
         }
     }
 
@@ -481,7 +485,7 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
                                     m = m,
                                     streaming = streaming,
                                     reaction = reactions[m.id] ?: 0,
-                                    onRegenerate = { vm.regenerate() },
+                                    onRegenerate = { followBottom = true; vm.regenerate() },
                                     onOpenSources = { sheetSources = m.sources },
                                     onLongPress = { menuMsg = m; lastMenuMsg = m; menuOpen = true },
                                     onReact = { v ->
@@ -589,6 +593,7 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
                 onSend = {
                     val t = input
                     input = ""
+                    followBottom = true
                     focusManager.clearFocus()
                     keyboard?.hide()
                     vm.send(t)
@@ -647,6 +652,7 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
             if (isAssistant) {
                 val r = reactions[mm.id] ?: 0
                 entries.add(MenuEntry(label = "重新生成", iconRes = R.drawable.ic_regegerate_outline_24) {
+                    followBottom = true
                     vm.regenerate()
                 })
                 entries.add(MenuEntry(
@@ -951,9 +957,11 @@ private fun ThinkingBlock(m: Msg, streaming: Boolean) {
     val c = Ds.color
     val collapse = LocalCollapseThinking.current
     var expanded by remember(m.id) { mutableStateOf(streaming || !collapse) }
-    // 官方录屏：流式期间思考块保持展开，整条回答结束后才收起为一行。
-    LaunchedEffect(streaming) {
-        if (!streaming && m.text.isNotEmpty() && collapse) expanded = false
+    // 官方录屏：思考结束（正文开始出现）的瞬间就收起为一行，不等整条回答结束，
+    // 否则收起时正文已经很长，长思考块一收会造成整屏跳动。
+    val thinkingDone = !streaming || m.text.isNotEmpty()
+    LaunchedEffect(thinkingDone) {
+        if (collapse && thinkingDone) expanded = false
     }
     val chevron by animateFloatAsState(
         targetValue = if (expanded) 90f else 0f,
@@ -986,10 +994,12 @@ private fun ThinkingBlock(m: Msg, streaming: Boolean) {
         }
         AnimatedVisibility(
             visible = expanded && !m.reasoning.isNullOrBlank(),
-            enter = expandVertically(animationSpec = tween(130, easing = FastOutSlowInEasing)) +
-                fadeIn(tween(100)),
-            exit = shrinkVertically(animationSpec = tween(110, easing = FastOutSlowInEasing)) +
-                fadeOut(tween(70))
+            // 官方观感：展开/收起都是缓入缓出的高度过渡。收起时如果思考块比屏幕还高，
+            // 110ms 会在一两帧内完成、看上去像瞬跳，这里放慢到 260ms 并让文字稍早淡出。
+            enter = expandVertically(animationSpec = tween(200, easing = FastOutSlowInEasing)) +
+                fadeIn(tween(150)),
+            exit = shrinkVertically(animationSpec = tween(260, easing = FastOutSlowInEasing)) +
+                fadeOut(tween(140))
         ) {
             Row(modifier = Modifier.height(IntrinsicSize.Min).padding(top = 10.dp, start = 7.3.dp)) {
                 Box(

@@ -81,7 +81,8 @@ fun DsPill(
     val c = Ds.color
     val shape = RoundedCornerShape(14.5.dp)
     // 官方录屏逐帧实测：胶囊切换是瞬时的（相邻帧 34~50ms 内完成），没有颜色渐变；
-    // ON = 浅蓝底 #ECF2FE + 蓝字，OFF = 白底 + 黑字 + 浅灰边；按压是无界圆形 ripple。
+    // ON = 浅蓝底 #ECF2FE + 蓝字，OFF = 白底 + 黑字 + 浅灰边；
+    // 按压是无界圆形 ripple，但半径很小（逐帧量约 18dp，直径约 1.25 倍胶囊高），不会糊满整块区域。
     val bg = when {
         active -> c.brandSoft
         c.dark -> Color(0xFF2A2A2A)
@@ -100,7 +101,7 @@ fun DsPill(
             .border(1.dp, stroke, shape)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(bounded = false, color = fg),
+                indication = ripple(bounded = false, radius = 18.dp, color = fg),
                 onClick = onClick
             )
             .padding(start = 11.dp, end = 9.dp),

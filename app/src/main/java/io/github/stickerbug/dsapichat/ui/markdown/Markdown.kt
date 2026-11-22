@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -32,12 +33,14 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.stickerbug.dsapichat.R
@@ -120,25 +123,36 @@ fun parseBlocks(src: String): List<MdBlock> {
             continue
         }
 
-        if (trimmed == "\$\$" || (trimmed.startsWith("\$\$") && trimmed.length > 4)) {
-            if (trimmed.length > 4 && trimmed.endsWith("\$\$")) {
-                flushPara()
-                out.add(MdBlock.Math(trimmed.removePrefix("\$\$").removeSuffix("\$\$").trim()))
+        // 块公式：$$...$$（单行或跨行）与 \[...\]（单行或跨行）。官方两种定界符都支持。
+        if (trimmed.startsWith("\$\$") || trimmed.startsWith("\\[")) {
+            flushPara()
+            val close = if (trimmed.startsWith("\$\$")) "\$\$" else "\\]"
+            val rest = trimmed.substring(close.length)
+            val sb = StringBuilder()
+            val sameLine = rest.indexOf(close)
+            if (sameLine >= 0) {
+                sb.append(rest.substring(0, sameLine))
                 i++
-                continue
-            }
-            if (trimmed == "\$\$") {
-                flushPara()
-                val tex = StringBuilder()
+            } else {
+                sb.append(rest)
                 i++
-                while (i < lines.size && lines[i].trim() != "\$\$") {
-                    tex.append(lines[i]).append("\n")
+                while (i < lines.size) {
+                    val l = lines[i].trim()
+                    val e = l.indexOf(close)
+                    if (e >= 0) {
+                        if (sb.isNotEmpty() || e > 0) sb.append('\n')
+                        sb.append(l.substring(0, e))
+                        i++
+                        break
+                    }
+                    if (sb.isNotEmpty()) sb.append('\n')
+                    sb.append(l)
                     i++
                 }
-                if (i < lines.size) i++
-                out.add(MdBlock.Math(tex.toString().trim()))
-                continue
             }
+            val tex = sb.toString().trim()
+            if (tex.isNotEmpty()) out.add(MdBlock.Math(tex))
+            continue
         }
 
         if (trimmed.isEmpty()) {
@@ -254,24 +268,51 @@ private fun inline(src: String, c: DsColors, maths: MutableList<String> = mutabl
     while (i < n) {
         val ch = src[i]
 
+        // 行内公式的另一种定界符 \\(...\\) / \\[...\\]（模型常混用）；排在反斜杠转义之前，否则反斜杠会被吃掉。
+        if (ch == '\\' && i + 1 < n && (src[i + 1] == '(' || src[i + 1] == '[')) {
+            val close = if (src[i + 1] == '(') "\\)" else "\\]"
+            val end = src.indexOf(close, i + 2)
+            if (end > i + 2) {
+                flushPlain()
+                val tex = src.substring(i + 2, end).replace('\n', ' ')
+                val id = "x" + maths.size
+                maths.add(tex)
+                appendInlineContent(id, tex)
+                i = end + close.length
+                continue
+            }
+        }
+
         if (ch == '\\' && i + 1 < n) {
             plain.append(src[i + 1])
             i += 2
             continue
         }
 
+        if (ch == '$' && i + 1 < n && src[i + 1] == '$') {
+            val end = src.indexOf("$$", i + 2)
+            if (end > i + 2) {
+                flushPlain()
+                val tex = src.substring(i + 2, end).replace('\n', ' ')
+                val id = "x" + maths.size
+                maths.add(tex)
+                appendInlineContent(id, tex)
+                i = end + 2
+                continue
+            }
+        }
+
         if (ch == '$') {
             val end = src.indexOf('$', i + 1)
             if (end > i + 1) {
-                val tex = src.substring(i + 1, end)
-                if (!tex.contains('\n')) {
-                    flushPlain()
-                    val id = "x" + maths.size
-                    maths.add(tex)
-                    appendInlineContent(id, tex)
-                    i = end + 1
-                    continue
-                }
+                // 跨行的行内公式按单行渲染（官方同样渲染，不会显示原始 TeX）
+                val tex = src.substring(i + 1, end).replace('\n', ' ')
+                flushPlain()
+                val id = "x" + maths.size
+                maths.add(tex)
+                appendInlineContent(id, tex)
+                i = end + 1
+                continue
             }
         }
 
@@ -504,23 +545,31 @@ private fun BlockView(b: MdBlock, c: DsColors, first: Boolean = false) {
 
 @Composable
 private fun LatexBlock(tex: String, c: DsColors) {
-    val px = with(LocalDensity.current) { 17.sp.toPx() }
-    val drawable = remember(tex, px, c.dark) {
-        runCatching {
-            JLatexMathDrawable.builder(tex)
-                .textSize(px)
-                .color(c.textPrimary.toArgb())
-                .background(0)
-                .build()
-        }.getOrNull()
-    }
-    Box(
+    val density = LocalDensity.current
+    val basePx = with(density) { 17.sp.toPx() }
+    val minPx = with(density) { 9.sp.toPx() }
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .background(c.codeBg, RoundedCornerShape(10.dp))
             .padding(horizontal = 12.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {
+        val availPx = with(density) { maxWidth.toPx() }
+        val drawable = remember(tex, availPx, c.dark) {
+            fun build(px: Float) = runCatching {
+                JLatexMathDrawable.builder(tex)
+                    .textSize(px)
+                    .color(c.textPrimary.toArgb())
+                    .background(0)
+                    .build()
+            }.getOrNull()
+            val base = build(basePx)
+            // 超宽公式按比例缩到卡片宽度内，否则 AndroidView 会被右侧裁掉。
+            if (base != null && availPx > 0f && base.intrinsicWidth > availPx) {
+                build((basePx * availPx / base.intrinsicWidth * 0.97f).coerceAtLeast(minPx)) ?: base
+            } else base
+        }
         if (drawable == null) {
             Text(
                 text = tex,
@@ -538,6 +587,98 @@ private fun LatexBlock(tex: String, c: DsColors) {
     }
 }
 
+/**
+ * 估算一个单元格（可含行内公式/行内代码/加粗/链接）渲染后的宽度。
+ * 之前直接按原始 TeX 文本量宽，公式列会被撑得离谱、后面的列被挤出屏幕。
+ */
+private fun inlineWidth(src: String, measurer: TextMeasurer, density: Density, style: TextStyle, c: DsColors): Float {
+    val mathPx = with(density) { 17.sp.toPx() }
+    var w = 0f
+    val plain = StringBuilder()
+    fun widthOf(text: String, st: TextStyle): Float =
+        if (text.isEmpty()) 0f else measurer.measure(AnnotatedString(text), st, softWrap = false).size.width.toFloat()
+    fun flush() {
+        if (plain.isNotEmpty()) { w += widthOf(plain.toString(), style); plain.clear() }
+    }
+    var i = 0
+    val n = src.length
+    while (i < n) {
+        val ch = src[i]
+        var tex: String? = null
+        var adv = 0
+        if (ch == '\\' && i + 1 < n && (src[i + 1] == '(' || src[i + 1] == '[')) {
+            val close = if (src[i + 1] == '(') "\\)" else "\\]"
+            val e = src.indexOf(close, i + 2)
+            if (e > i + 2) { tex = src.substring(i + 2, e); adv = e + close.length - i }
+        }
+        if (tex == null && ch == '$' && i + 1 < n && src[i + 1] == '$') {
+            val e = src.indexOf("$$", i + 2)
+            if (e > i + 2) { tex = src.substring(i + 2, e); adv = e + 2 - i }
+        }
+        if (tex == null && ch == '$') {
+            val e = src.indexOf('$', i + 1)
+            if (e > i + 1) { tex = src.substring(i + 1, e); adv = e + 1 - i }
+        }
+        if (tex != null) {
+            flush()
+            val tw = runCatching {
+                JLatexMathDrawable.builder(tex.replace('\n', ' '))
+                    .textSize(mathPx)
+                    .color(c.textPrimary.toArgb())
+                    .background(0)
+                    .build()
+                    .intrinsicWidth
+            }.getOrNull()
+            w += (tw ?: (tex.length * 7)).toFloat()
+            i += adv
+            continue
+        }
+        if (ch == '`') {
+            val e = src.indexOf('`', i + 1)
+            if (e > i) {
+                flush()
+                w += widthOf(src.substring(i + 1, e), style.copy(fontFamily = FontFamily.Monospace, fontSize = 14.sp))
+                i = e + 1
+                continue
+            }
+        }
+        if (ch == '*' && i + 1 < n && src[i + 1] == '*') {
+            val e = src.indexOf("**", i + 2)
+            if (e > i + 1) {
+                flush()
+                w += widthOf(src.substring(i + 2, e), style.copy(fontWeight = FontWeight.SemiBold))
+                i = e + 2
+                continue
+            }
+        }
+        if (ch == '~' && i + 1 < n && src[i + 1] == '~') {
+            val e = src.indexOf("~~", i + 2)
+            if (e > i + 1) {
+                flush()
+                w += widthOf(src.substring(i + 2, e), style)
+                i = e + 2
+                continue
+            }
+        }
+        if (ch == '[') {
+            val close = src.indexOf(']', i + 1)
+            val open = if (close > i) src.indexOf('(', close) else -1
+            val end = if (open == close + 1) src.indexOf(')', open) else -1
+            if (close > i && end > open) {
+                flush()
+                w += widthOf(src.substring(i + 1, close), style)
+                i = end + 1
+                continue
+            }
+        }
+        if (ch == '\\' && i + 1 < n) { plain.append(src[i + 1]); i += 2; continue }
+        plain.append(ch)
+        i++
+    }
+    flush()
+    return w
+}
+
 @Composable
 private fun TableBlock(t: MdBlock.Table, c: DsColors) {
     val measurer = rememberTextMeasurer()
@@ -548,12 +689,10 @@ private fun TableBlock(t: MdBlock.Table, c: DsColors) {
     val widths = remember(t, c.dark) {
         (0 until cols).map { ci ->
             val head = if (ci < t.headers.size) t.headers[ci] else null
-            val headW = head?.let {
-                measurer.measure(AnnotatedString(it), headerStyle, softWrap = false).size.width
-            } ?: 0
+            val headW = head?.let { inlineWidth(it, measurer, density, headerStyle, c) } ?: 0f
             val bodyW = t.rows.maxOfOrNull { r ->
-                if (ci < r.size) measurer.measure(AnnotatedString(r[ci]), cellStyle, softWrap = false).size.width else 0
-            } ?: 0
+                if (ci < r.size) inlineWidth(r[ci], measurer, density, cellStyle, c) else 0f
+            } ?: 0f
             with(density) { (maxOf(headW, bodyW).toDp() + 24.dp) }
         }
     }
