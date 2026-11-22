@@ -27,7 +27,7 @@
 
 1. 到 [Releases](https://github.com/Stickerbug/ds-api-chat/releases/latest) 下载最新的 `DS-API-Chat-<版本>.apk`。
 2. 在手机上允许「安装未知应用」，安装 APK（要求 Android 8.0+，minSdk 26）。
-3. 也可以用 adb：`adb install -r DS-API-Chat-1.0.8.apk`。
+3. 也可以用 adb：`adb install -r DS-API-Chat-1.0.9.apk`。
 4. 打开 App → 侧栏「设置」→「接口」：
    - **API Key**：在 [platform.deepseek.com](https://platform.deepseek.com/api_keys) 申请
    - **接口地址**：默认 `https://api.deepseek.com`
@@ -116,6 +116,7 @@ app/src/main/java/io/github/stickerbug/dsapichat/
 
 ## 更新日志
 
+- **1.0.9**：应用显示名统一为「DS API Chat」（此前英文/其它语言环境显示为 DeepSeek），桌面图标、权限弹窗、安装界面显示一致。
 - **1.0.8**：清理占位功能（移除账号管理、退出登录、登录设备管理、「我共享的链接」、数据优化开关等假入口，分享页「复制链接」改为真实的「复制文本」）；朗读音色弹窗真正可用——云端音色名 + 系统引擎音色分开选择；「语音识别」新增识别语言（自动 / 中文 / 英文 / 日语）；分享页「生成图片」改为「保存图片」，直接存入系统相册；「检查更新」接入 GitHub Releases，「帮助与反馈」直达 GitHub Issues；长按菜单举报文案改为引导 GitHub Issues。
 - **1.0.7**：语音设置可配置化——「朗读合成」新增朗读方式（自动 / 云端 / 本地）与本地朗读语速（0.8× / 1.0× / 1.2× / 1.5×），「语音识别」新增识别方式（自动 / 云端 / 系统）；两个对话框都加了 OpenAI / Groq / SiliconFlow 快速预设（可继续手动改）；选「云端」但没填接口时会明确提示未配置，不会悄悄换回本地，选「本地 / 系统」时也不会走云端；设置页对应行会显示当前模式（如「自动（系统）」「云端（未配置）」「本地」）。
 - **1.0.6**：新增可选云端语音能力——「朗读合成」支持 OpenAI 兼容 `/audio/speech`（长回答按句分块、顺序播放、播放中可停止，失败自动回退系统 TTS；不配置则仍用系统引擎）；「语音识别」支持 OpenAI 兼容 `/audio/transcriptions`（点击麦克风录音、点完成上传识别，未配置时回退系统识别）；修复 Android 11+ 包可见性导致找不到系统 TTS 引擎、朗读无声的问题，并补上录音权限；设置页新增「语音」分组（朗读音色 / 语音识别 / 朗读合成）及配置对话框。

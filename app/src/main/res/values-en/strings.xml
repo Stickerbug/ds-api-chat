@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">DeepSeek</string>
+    <string name="app_name">DS API Chat</string>
     <string name="new_chat">New chat</string>
     <string name="search_chat">Search chats</string>
     <string name="no_chat">No conversations</string>
