@@ -33,7 +33,9 @@ data class Citation(
     val text: String = "",
     val url: String = "",
     /** 与搜索结果列表一致的序号，从 1 开始 */
-    val index: Int = 1
+    val index: Int = 1,
+    /** 收到该 citation 时正文长度（流式锚点）；-1 表示旧数据，回退到文本匹配定位 */
+    val offset: Int = -1
 )
 
 @Serializable

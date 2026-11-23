@@ -19,13 +19,23 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 enum class ApiProtocol { OPENAI, ANTHROPIC }
 
-/** 设置项 protocol 为 auto 时按接口地址与模型名推断。 */
-internal fun resolveProtocol(choice: String, baseUrl: String, model: String): ApiProtocol = when (choice) {
+/**
+ * 设置项 protocol 为 auto 时按接口地址与模型名推断。
+ * 联网搜索只走 Anthropic 兼容端点（服务端工具 deepseek_web_search/deepseek_read_url），
+ * 因此开启搜索时官方 api.deepseek.com 也推断为 ANTHROPIC，避免 OpenAI 协议静默丢弃搜索。
+ */
+internal fun resolveProtocol(
+    choice: String,
+    baseUrl: String,
+    model: String,
+    search: Boolean = false
+): ApiProtocol = when (choice) {
     "openai" -> ApiProtocol.OPENAI
     "anthropic" -> ApiProtocol.ANTHROPIC
     else -> when {
         baseUrl.contains("anthropic", true) -> ApiProtocol.ANTHROPIC
         model.startsWith("deepseek-flash") || model.startsWith("deepseek-v4") -> ApiProtocol.ANTHROPIC
+        search && baseUrl.contains("deepseek.com", true) -> ApiProtocol.ANTHROPIC
         else -> ApiProtocol.OPENAI
     }
 }

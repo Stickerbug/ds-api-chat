@@ -556,7 +556,7 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
                 ErrorBanner(text = errText(error), onOpenSettings = onOpenSettings)
             }
 
-            val anthropic = resolveProtocol(settings.protocol, settings.baseUrl, settings.model) == ApiProtocol.ANTHROPIC
+            val anthropic = resolveProtocol(settings.protocol, settings.baseUrl, settings.model, settings.search) == ApiProtocol.ANTHROPIC
             ChatInputBar(
                 text = input,
                 onTextChanged = { input = it },
@@ -571,7 +571,13 @@ fun ChatRoute(vm: AppViewModel, onOpenSettings: () -> Unit, forceReturning: Bool
                     }
                 },
                 search = settings.search,
-                onToggleSearch = { vm.saveSettings(settings.copy(search = !settings.search)) },
+                onToggleSearch = {
+                    val next = !settings.search
+                    if (next && resolveProtocol(settings.protocol, settings.baseUrl, settings.model, true) != ApiProtocol.ANTHROPIC) {
+                        Toast.makeText(context, "当前接口协议不支持联网搜索，请在设置里切到 Anthropic 兼容", Toast.LENGTH_LONG).show()
+                    }
+                    vm.saveSettings(settings.copy(search = next))
+                },
                 attachments = attachments,
                 uploading = uploading,
                 onPickAttachment = { filePicker.launch(arrayOf("*/*")) },
@@ -1062,11 +1068,21 @@ private fun SourcesBlock(m: Msg, streaming: Boolean, onOpenSources: () -> Unit) 
     }
 }
 
-/** 把 citations 的角标插回正文引用句末（Unicode 上标数字）。 */
+/**
+ * 把 citations 的角标插回正文（Unicode 上标数字）。
+ * 优先用流式期间记录的 offset 锚点（收到 citation 时正文已流出的长度，即引用句末），
+ * 旧数据没有 offset（-1）时回退到 cited_text 文本匹配。
+ */
 private fun withCitations(text: String, citations: List<Citation>): String {
     if (text.isEmpty() || citations.isEmpty()) return text
     var out = text
-    for (c in citations.sortedBy { it.index }) {
+    val anchored = citations
+        .filter { it.offset in 0..text.length }
+        .sortedWith(compareByDescending<Citation> { it.offset }.thenByDescending { it.index })
+    for (c in anchored) {
+        out = out.substring(0, c.offset) + superscript(c.index) + out.substring(c.offset)
+    }
+    for (c in citations.filter { it.offset !in 0..text.length }.sortedBy { it.index }) {
         val probe = c.text.trim()
         if (probe.isEmpty()) continue
         val needle = if (probe.length > 48) probe.substring(0, 48) else probe

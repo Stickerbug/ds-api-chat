@@ -76,7 +76,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             _error.value = "auth"
             return
         }
-        if (resolveProtocol(s.protocol, s.baseUrl, s.model) != ApiProtocol.ANTHROPIC) {
+        if (resolveProtocol(s.protocol, s.baseUrl, s.model, s.search) != ApiProtocol.ANTHROPIC) {
             _error.value = "attach-protocol"
             return
         }
@@ -118,7 +118,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             _error.value = "auth"
             return
         }
-        if (resolveProtocol(s.protocol, s.baseUrl, s.model) != ApiProtocol.ANTHROPIC) {
+        if (resolveProtocol(s.protocol, s.baseUrl, s.model, s.search) != ApiProtocol.ANTHROPIC) {
             _error.value = "attach-protocol"
             return
         }
@@ -580,7 +580,7 @@ def gd(f, grad, x0, lr=0.1, steps=100):
     private fun stream(convId: String, msgId: String, s: Settings) {
         job?.cancel()
         _streaming.value = true
-        val client = ChatClient(s.baseUrl, s.apiKey, resolveProtocol(s.protocol, s.baseUrl, s.model))
+        val client = ChatClient(s.baseUrl, s.apiKey, resolveProtocol(s.protocol, s.baseUrl, s.model, s.search))
         val history = (_current.value?.messages ?: emptyList())
             .filter { it.id != msgId && it.err == null && (it.text.isNotBlank() || it.attachments.isNotEmpty()) }
             .map { ApiMsg(it.role.apiName, it.text, it.attachments.filter { a -> a.fileId.isNotBlank() }) }
@@ -627,7 +627,16 @@ def gd(f, grad, x0, lr=0.1, steps=100):
                             } else m.sources
                             val dup = m.citations.any { it.url == ev.url && it.text == ev.text }
                             if (dup || ev.text.isBlank()) m.copy(sources = list)
-                            else m.copy(sources = list, citations = m.citations + Citation(text = ev.text, url = ev.url, index = index))
+                            else m.copy(
+                                sources = list,
+                                citations = m.citations + Citation(
+                                    text = ev.text,
+                                    url = ev.url,
+                                    index = index,
+                                    // 记录收到 citation 时正文已流出的长度，用于把角标插回到引用句末
+                                    offset = m.text.length
+                                )
+                            )
                         }
 
                         is StreamEvent.Reading -> updateMsg(convId, msgId) { m ->
